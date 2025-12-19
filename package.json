@@ -1,0 +1,17 @@
+{
+    "name": "bananabatch",
+    "version": "0.1.0",
+    "description": "A 'Set & Forget' batch image processing pipeline using Gemini 2.5 Flash Image",
+    "private": true,
+    "scripts": {
+        "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+        "dev:frontend": "cd frontend && npm run dev",
+        "dev:backend": "cd backend && wrangler dev",
+        "build": "cd frontend && npm run build",
+        "install:all": "cd frontend && npm install",
+        "preview": "cd frontend && npm run preview"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}

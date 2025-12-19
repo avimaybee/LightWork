@@ -1,0 +1,100 @@
+/**
+ * APIHealthMeter Component Styles
+ */
+
+.api-health {
+    padding: var(--space-3);
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    border: var(--border-subtle);
+}
+
+.api-health-error {
+    border-color: var(--status-failed);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.health-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.health-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+}
+
+.health-dot-active {
+    background: var(--status-completed);
+    box-shadow: 0 0 8px var(--status-completed);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.health-dot-idle {
+    background: var(--status-pending);
+}
+
+.health-dot-loading {
+    background: var(--status-cooldown);
+    animation: pulse-dot 1s ease-in-out infinite;
+}
+
+.health-dot-error {
+    background: var(--status-failed);
+}
+
+@keyframes pulse-dot {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.health-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.health-stats {
+    display: flex;
+    gap: var(--space-4);
+}
+
+.health-stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.stat-value {
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.stat-label {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.health-cooldown {
+    margin-top: var(--space-3);
+    padding: var(--space-2);
+    background: rgba(245, 158, 11, 0.1);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    color: var(--status-cooldown);
+    text-align: center;
+}

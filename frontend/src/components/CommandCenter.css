@@ -1,0 +1,159 @@
+/**
+ * CommandCenter Component Styles
+ */
+
+.command-center {
+    width: 320px;
+    min-width: 320px;
+    height: 100vh;
+    background: var(--bg-secondary);
+    border-right: var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.command-header {
+    padding: var(--space-6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: var(--border-subtle);
+    background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-secondary) 100%);
+}
+
+.command-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.banana-emoji {
+    font-size: var(--text-2xl);
+}
+
+.command-version {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    padding: var(--space-1) var(--space-2);
+    background: var(--bg-elevated);
+    border-radius: var(--radius-full);
+}
+
+.command-section {
+    padding: var(--space-4) var(--space-6);
+}
+
+.command-label {
+    display: block;
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.module-description {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.command-divider {
+    height: 1px;
+    background: var(--charcoal-700);
+    margin: var(--space-2) var(--space-6);
+}
+
+/* Upload area */
+.upload-area {
+    display: block;
+    padding: var(--space-6);
+    border: 2px dashed var(--charcoal-600);
+    border-radius: var(--radius-lg);
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.upload-area:hover {
+    border-color: var(--accent-primary);
+    background: rgba(255, 200, 0, 0.05);
+}
+
+.upload-input {
+    display: none;
+}
+
+.upload-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
+.upload-icon {
+    font-size: var(--text-2xl);
+}
+
+/* Progress */
+.progress-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--banana-600) 0%, var(--banana-400) 100%);
+    border-radius: var(--radius-full);
+    transition: width var(--transition-slow);
+}
+
+/* Actions */
+.command-actions {
+    padding: var(--space-4) var(--space-6);
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.btn-full {
+    width: 100%;
+}
+
+.btn-danger {
+    color: var(--status-failed);
+}
+
+.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--status-failed);
+}
+
+/* Textarea */
+.textarea {
+    resize: vertical;
+    min-height: 80px;
+    font-family: var(--font-body);
+}

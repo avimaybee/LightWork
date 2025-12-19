@@ -1,0 +1,21 @@
+name = "bananabatch-api"
+main = "src/main.py"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["python_workers"]
+
+[vars]
+ENVIRONMENT = "development"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "bananabatch-db"
+database_id = "268599ef-2c76-41cf-8202-447ba8d43d33"  # Replace after running: wrangler d1 create bananabatch-db
+
+# R2 Bucket binding
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "bananabatch-storage"
+
+# For local development, create a .dev.vars file with:
+# GEMINI_API_KEY=your_api_key_here

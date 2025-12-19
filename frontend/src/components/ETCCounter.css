@@ -1,0 +1,24 @@
+/**
+ * ETCCounter Component Styles
+ */
+
+.etc-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.etc-complete {
+    color: var(--status-completed);
+}
+
+.etc-icon {
+    font-size: var(--text-base);
+}
+
+.etc-time {
+    font-weight: 500;
+}
