@@ -1,78 +1,116 @@
-# BananaBatch 🍌
+# ✨ LightWork
 
-A "Set & Forget" batch image processing pipeline powered by **Gemini 2.5 Flash Image**.
+> AI-powered batch image processing using Google's Gemini Nano Banana models
+
+Transform your images in bulk using AI. Upload multiple images, select an enhancement module, and let Gemini do the rest.
+
+## Features
+
+- **Batch Processing** - Upload up to 50 images at once
+- **AI Enhancement Modules** - Food plating, product backgrounds, portraits, real estate
+- **Two AI Models** - Fast (free) or Pro (paid, higher quality)
+- **Real-time Progress** - Watch your images process with live status updates
+- **ZIP Download** - Download all processed images in one click
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React + Vite + TypeScript + Shadcn UI |
-| Backend | Cloudflare Python Workers + FastAPI |
-| Database | Cloudflare D1 (SQLite at edge) |
-| Storage | Cloudflare R2 (S3-compatible) |
-
-## Prerequisites
-
-- Node.js 18+
-- Python 3.12+
-- Wrangler CLI
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS
+- **Backend**: Cloudflare Pages Functions
+- **Database**: Cloudflare D1 (SQLite)
+- **Storage**: Cloudflare R2
+- **AI**: Google Gemini API (image generation)
 
 ## Quick Start
 
-### 1. Install Wrangler CLI
+### Prerequisites
+
+- Node.js 18+
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
+- Cloudflare account with D1 and R2 set up
+- Gemini API key
+
+### Local Development
 
 ```bash
-npm install -g wrangler
-wrangler login
-```
-
-### 2. Frontend Setup
-
-```bash
-cd frontend
+# Install dependencies
 npm install
-npm run dev
+
+# Create .dev.vars with your Gemini API key
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars and add your GEMINI_API_KEY
+
+# IMPORTANT: Apply database schema locally (required before first run!)
+npm run db:migrate:local
+
+# Start dev server with Pages Functions
+npm run pages:dev
 ```
 
-### 3. Backend Setup
+Visit `http://localhost:8788` to use the app.
+
+> ⚠️ **Troubleshooting:** If images stay "PENDING" forever, you likely forgot to run `npm run db:migrate:local`. Stop the server, run the migration, then restart.
+
+### Deployment
 
 ```bash
-cd backend
+# Build frontend
+npm run build
 
-# Create .dev.vars for local development
-echo "GEMINI_API_KEY=your_api_key_here" > .dev.vars
+# Apply schema to remote D1
+npm run db:migrate
 
-# Run locally
-wrangler dev
+# Deploy to Cloudflare Pages
+npm run pages:deploy
 ```
 
-### 4. Create Cloudflare Resources
+## AI Models
 
-```bash
-# Create D1 database
-wrangler d1 create bananabatch-db
-
-# Create R2 bucket
-wrangler r2 bucket create bananabatch-storage
-```
-
-Update `backend/wrangler.toml` with the returned database ID.
+| Model | Description | Output | Cost |
+|-------|-------------|--------|------|
+| **Fast** (Nano Banana) | High-volume batch processing | 1024px | Free |
+| **Pro** (Nano Banana Pro) | Professional quality output | Up to 4K | Paid |
 
 ## Project Structure
 
 ```
-BananaBatch/
-├── frontend/          # React + Vite dashboard
-├── backend/           # Cloudflare Python Workers API
-├── .Agent/            # Agent skills & workflows
-└── Docs/              # PRD and documentation
+LightWork/
+├── src/                    # Frontend (React)
+│   ├── components/         # UI components
+│   ├── hooks/              # Custom React hooks
+│   ├── lib/                # API client & utilities
+│   └── pages/              # Page components
+├── functions/              # Backend (Cloudflare Pages Functions)
+│   ├── api/                # API endpoints
+│   └── lib/                # Gemini service & processor
+├── schema.sql              # D1 database schema
+├── migrations/             # Database migrations
+└── wrangler.toml           # Cloudflare configuration
 ```
 
-## Rate Limits
+## Environment Variables
 
-- **Gemini API**: 7 RPM → 8.6 second minimum interval
-- **Cooldown on 429/503**: 65 seconds pause
-- **Max retries**: 3 per image
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_API_KEY` | Your Google Gemini API key |
+
+For local development, add to `.dev.vars`. For production, set in Cloudflare Pages dashboard.
+
+> **Note:** The app was renamed from "BananaBatch" to "LightWork". The D1 database (`bananabatch-db`) and R2 bucket (`bananabatch-storage`) retain the original names to preserve existing data and avoid migration.
+
+## Available Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start Vite dev server (frontend only) |
+| `npm run pages:dev` | Start full stack with Pages Functions |
+| `npm run build` | Build for production |
+| `npm run pages:deploy` | Deploy to Cloudflare Pages |
+| `npm run db:migrate` | Apply schema to remote D1 |
+| `npm run db:migrate:local` | Apply schema locally |
+
+## Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed technical documentation.
 
 ## License
 

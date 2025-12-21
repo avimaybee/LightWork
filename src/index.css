@@ -1,0 +1,249 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@500&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* 
+ * LIGHTWORK V2: TOOL-FIRST EDITORIAL
+ * Aesthetic: Industrial Precision x Warm Accessibility
+ */
+
+@theme {
+  /* Typography */
+  --font-display: "Outfit", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Core Palette — restrained neutrals with controlled pops */
+  --color-cream: #f7f3ec;
+  --color-ink: #111111;
+  --color-ink-soft: #353434;
+  --color-line: #1c1c1c;
+  --color-yellow: #f4f27a;
+  --color-orange: #ff7a2f;
+  --color-mint: #c8f1c5;
+  --color-sand: #e7dfd3;
+  --color-card: #ffffff;
+
+  /* Semantic aliases used by components */
+  --color-background: var(--color-cream);
+  --color-foreground: var(--color-ink);
+  --color-primary: var(--color-orange);
+  --color-primary-foreground: var(--color-ink);
+  --color-secondary: var(--color-yellow);
+  --color-secondary-foreground: var(--color-ink);
+  --color-accent: var(--color-mint);
+  --color-muted: #e9e4db;
+  --color-muted-foreground: #5a5650;
+  --color-border: var(--color-line);
+  --color-surface: #fdfbf7;
+  --color-surface-strong: #181818;
+  --color-surface-elevated: #ffffff;
+  --color-text-primary: var(--color-foreground);
+  --color-text-secondary: #4a4742;
+  --color-text-muted: #6c6861;
+  --color-text-inverse: #ffffff;
+
+  /* Legacy aliases (to stabilize existing component refs) */
+  --foreground: var(--color-foreground);
+  --primary: var(--color-primary);
+  --secondary: var(--color-secondary);
+  --accent-1: var(--color-yellow);
+  --accent-2: var(--color-mint);
+  --yellow: var(--color-yellow);
+  --orange: var(--color-orange);
+  --mint: var(--color-mint);
+
+  /* Shapes & Shadows */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px; /* Poster squircle */
+
+  --shadow-pop: 4px 4px 0px 0px #111111;
+  --shadow-pop-sm: 2px 2px 0px 0px #111111;
+  --shadow-pop-lg: 6px 6px 0px 0px #111111;
+  --shadow-hover: 8px 8px 0px 0px #111111;
+
+  /* Animations */
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-slide-up: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-reveal: reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-scale-in: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes reveal {
+    from { opacity: 0; clip-path: inset(0 0 100% 0); }
+    to { opacity: 1; clip-path: inset(0 0 0 0); }
+  }
+
+  @keyframes scaleIn {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+}
+
+/* Global Styles */
+@layer base {
+  * {
+    border-color: var(--color-border);
+    outline-color: var(--color-primary);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-body);
+    
+    /* Subtle grid backdrop */
+    background-image: 
+      linear-gradient(to right, rgba(17, 17, 17, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(17, 17, 17, 0.04) 1px, transparent 1px);
+    background-size: 44px 44px;
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: 800; /* Extra bold for impact */
+    letter-spacing: -0.03em; /* Tight letter spacing for editorial look */
+    line-height: 1.1;
+  }
+
+  /* Utility Classes for The Aesthetic */
+  .squircle {
+    border-radius: var(--radius-xl);
+    border: 2px solid var(--color-black);
+  }
+
+  .pop-shadow {
+    box-shadow: var(--shadow-pop);
+  }
+  
+  .pop-shadow-lg {
+    box-shadow: var(--shadow-pop-lg);
+  }
+
+  /* Animation utility hooks for components */
+  .animate-slide-up { animation: var(--animate-slide-up); }
+  .animate-reveal { animation: var(--animate-reveal); }
+  .animate-scale-in { animation: var(--animate-scale-in); }
+  .animate-float { animation: var(--animate-float); }
+
+  /* Word-Pill Treatment */
+  .word-pill {
+    display: inline-block;
+    padding: 0.2em 0.6em;
+    border-radius: 99px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    border: 2px solid var(--color-line);
+    transform: rotate(-1deg);
+    box-shadow: 2px 2px 0px 0px var(--color-line);
+    transition: all 0.2s ease;
+  }
+
+  .word-pill:hover {
+    transform: rotate(1deg) scale(1.05);
+    box-shadow: 4px 4px 0px 0px var(--color-line);
+  }
+
+  .word-pill-yellow { background-color: var(--color-yellow); color: var(--color-black); }
+  .word-pill-orange { background-color: var(--color-orange); color: var(--color-black); }
+  .word-pill-mint { background-color: var(--color-mint); color: var(--color-black); }
+  .word-pill-cream { background-color: var(--color-cream); color: var(--color-black); }
+
+  /* Tape Corners */
+  .tape-corner {
+    position: absolute;
+    width: 60px;
+    height: 20px;
+    background-color: rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(2px);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .tape-corner-tl { top: -10px; left: -20px; transform: rotate(-45deg); }
+  .tape-corner-tr { top: -10px; right: -20px; transform: rotate(45deg); }
+  .tape-corner-bl { bottom: -10px; left: -20px; transform: rotate(45deg); }
+  .tape-corner-br { bottom: -10px; right: -20px; transform: rotate(-45deg); }
+
+  /* Dashed Dividers */
+  .dashed-divider {
+    height: 2px;
+    background-image: linear-gradient(to right, var(--color-line) 50%, transparent 50%);
+    background-size: 12px 100%;
+    opacity: 0.2;
+  }
+
+  /* Staggered Reveal */
+  .stagger-reveal > * {
+    opacity: 0;
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .stagger-reveal > *:nth-child(1) { animation-delay: 0.1s; }
+  .stagger-reveal > *:nth-child(2) { animation-delay: 0.2s; }
+  .stagger-reveal > *:nth-child(3) { animation-delay: 0.3s; }
+  .stagger-reveal > *:nth-child(4) { animation-delay: 0.4s; }
+  .stagger-reveal > *:nth-child(5) { animation-delay: 0.5s; }
+
+  /* Selection Color */
+  ::selection {
+    background-color: var(--color-orange);
+    color: var(--color-black);
+  }
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-cream);
+  border-left: 2px solid var(--color-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-black);
+  border: 2px solid var(--color-cream);
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-orange);
+}
+
+@layer utilities {
+  .panel-surface {
+    background: var(--color-card);
+    border: 2px solid var(--color-line);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-pop);
+  }
+
+  .panel-dark {
+    background: var(--color-surface-strong);
+    color: var(--color-text-inverse);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-pop-lg);
+  }
+}
