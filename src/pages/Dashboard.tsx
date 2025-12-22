@@ -6,8 +6,8 @@ import {
     Command,
     Clock,
     Loader2,
-    Trash2,
     RotateCcw,
+    Menu,
 } from 'lucide-react';
 import { DropZone } from '@/components/DropZone';
 import { ModuleSelector } from '@/components/ModuleSelector';
@@ -21,7 +21,6 @@ import { UploadQueue } from '@/components/UploadQueue';
 import { useJobPolling } from '@/hooks/useJobPolling';
 import { useSessionRecovery } from '@/hooks/useSessionRecovery';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { 
     Dialog, 
     DialogContent, 
@@ -33,22 +32,8 @@ import {
 import { 
     Sheet, 
     SheetContent, 
-    SheetHeader, 
-    SheetTitle,
     SheetTrigger
 } from '@/components/ui/sheet';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { cn } from '@/lib/utils';
-import { Menu } from 'lucide-react';
 
 import { getModuleIcon } from '@/lib/icons';
 import {
@@ -67,6 +52,8 @@ import {
     updateModulePrompt,
     cleanupJobs,
     retryJob,
+    deleteJob,
+    submitFeedback,
     type Module,
     type ImageRecord,
     type GeminiModel,
@@ -136,6 +123,7 @@ export function Dashboard() {
 
     // Prompt editor stats
     const [editingImageId, setEditingImageId] = React.useState<string | null>(null);
+    const [bulkEditingIds, setBulkEditingIds] = React.useState<string[] | null>(null);
     const [lightboxId, setLightboxId] = React.useState<string | null>(null);
 
     // Job polling
@@ -526,6 +514,19 @@ export function Dashboard() {
         }
     };
 
+    const handleBulkEditPrompt = (ids: string[]) => {
+        setBulkEditingIds(ids);
+    };
+
+    const handleRetryJob = async (id: string) => {
+        try {
+            await retryJob(id);
+            loadProjects(true);
+        } catch (error) {
+            console.error('Retry failed:', error);
+        }
+    };
+
     const handleClearAllImages = async () => {
         if (!displayImages.length) return;
         try {
@@ -620,8 +621,9 @@ export function Dashboard() {
                     onNewProject={handleNewSession}
                     onCleanup={handleCleanup}
                     onProjectDelete={handleProjectDelete}
+                    onRetryJob={handleRetryJob}
+                    onBulkEditPrompt={handleBulkEditPrompt}
                     isLoadingProjects={isLoadingProjects}
-                    hasMoreProjects={hasMoreProjects}
                     observerTarget={observerTarget}
                     isProcessing={isProcessing}
                 />
@@ -652,8 +654,9 @@ export function Dashboard() {
                                     onNewProject={handleNewSession}
                                     onCleanup={handleCleanup}
                                     onProjectDelete={handleProjectDelete}
+                                    onRetryJob={handleRetryJob}
+                                    onBulkEditPrompt={handleBulkEditPrompt}
                                     isLoadingProjects={isLoadingProjects}
-                                    hasMoreProjects={hasMoreProjects}
                                     observerTarget={observerTarget}
                                     isProcessing={isProcessing}
                                 />
@@ -889,6 +892,31 @@ export function Dashboard() {
                     setEditingImageId(null);
                 }}
                 title="Refine Asset Prompt"
+            />
+
+            <PromptEditor
+                isOpen={!!bulkEditingIds}
+                onClose={() => setBulkEditingIds(null)}
+                prompt=""
+                onSave={async (prompt) => {
+                    if (!bulkEditingIds) return;
+                    try {
+                        await Promise.all(bulkEditingIds.map(id => {
+                            if (job?.images?.some(img => img.id === id)) {
+                                return updateImagePrompt(id, prompt);
+                            } else {
+                                setLocalImages(prev => prev.map(img => img.id === id ? { ...img, specific_prompt: prompt } : img));
+                                return Promise.resolve();
+                            }
+                        }));
+                        refetch();
+                    } catch (error) {
+                        console.error('Failed to bulk update prompts:', error);
+                    }
+                    setBulkEditingIds(null);
+                }}
+                title={`Edit ${bulkEditingIds?.length || 0} Prompts`}
+                placeholder="Apply instructions to all selected images..."
             />
 
             <PromptEditor

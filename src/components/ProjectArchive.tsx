@@ -17,9 +17,10 @@ interface ProjectArchiveProps {
     onNewProject: () => void;
     onCleanup: () => void;
     onProjectDelete: (e: React.MouseEvent, id: string) => void;
+    onRetryJob?: (id: string) => void;
+    onBulkEditPrompt?: (ids: string[]) => void;
     isLoadingProjects: boolean;
-    hasMoreProjects: boolean;
-    observerTarget: React.RefObject<HTMLDivElement>;
+    observerTarget: React.RefObject<HTMLDivElement | null>;
     isProcessing: boolean;
 }
 
@@ -34,8 +35,9 @@ export function ProjectArchive({
     onNewProject,
     onCleanup,
     onProjectDelete,
+    onRetryJob,
+    onBulkEditPrompt,
     isLoadingProjects,
-    hasMoreProjects,
     observerTarget,
     isProcessing,
 }: ProjectArchiveProps) {
@@ -53,7 +55,19 @@ export function ProjectArchive({
                 </div>
 
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-display font-extrabold text-xs tracking-widest uppercase text-[var(--color-ink-sub)]">Archive</h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className="font-display font-extrabold text-xs tracking-widest uppercase text-[var(--color-ink-sub)]">Archive</h2>
+                        {projects.length > 0 && onBulkEditPrompt && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onBulkEditPrompt(projects.map(p => p.id))}
+                                className="h-6 px-2 text-[9px] font-bold uppercase tracking-tighter hover:bg-[var(--color-accent-sub)] hover:text-[var(--color-accent)]"
+                            >
+                                Bulk Edit
+                            </Button>
+                        )}
+                    </div>
                     <div className="flex items-center gap-1.5">
                         <div className={cn(
                             "w-1.5 h-1.5 rounded-full",
@@ -138,13 +152,27 @@ export function ProjectArchive({
                                 </Badge>
                             </div>
 
-                            <button
-                                onClick={(e) => onProjectDelete(e, p.id)}
-                                className="absolute right-4 bottom-4 w-8 h-8 rounded-lg bg-white shadow-sm border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink-sub)] hover:text-red-500 hover:border-red-200 transition-all opacity-0 group-hover:opacity-100 z-20"
-                                title="Delete Project"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="absolute right-4 bottom-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
+                                {p.status === 'FAILED' && onRetryJob && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onRetryJob(p.id);
+                                        }}
+                                        className="w-8 h-8 rounded-lg bg-white shadow-sm border border-[var(--color-border)] flex items-center justify-center text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 transition-all"
+                                        title="Retry Job"
+                                    >
+                                        <Play className="w-3.5 h-3.5 fill-current" />
+                                    </button>
+                                )}
+                                <button
+                                    onClick={(e) => onProjectDelete(e, p.id)}
+                                    className="w-8 h-8 rounded-lg bg-white shadow-sm border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink-sub)] hover:text-red-500 hover:border-red-200 transition-all"
+                                    title="Delete Project"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
 
                             <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-accent)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>

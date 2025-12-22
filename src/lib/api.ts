@@ -56,10 +56,19 @@ export interface ImageRecord {
     specific_prompt: string | null;
     error_message: string | null;
     retry_count: number;
+    rating?: number | null;
     created_at: number;
     processed_at: number | null;
     original_url?: string;
     processed_url?: string;
+}
+
+export interface Feedback {
+    id: string;
+    image_id: string;
+    rating: 1 | -1;
+    comment: string | null;
+    created_at: number;
 }
 
 export interface JobWithImages extends Job {

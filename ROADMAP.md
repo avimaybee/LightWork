@@ -185,30 +185,30 @@ This roadmap prioritizes 180 tasks across 9 sectors, sorted by their impact on p
 12. [x] **Image Zoom / Lightbox** (Medium Impact) - **VERIFIED**
     - *Description*: Inspect results.
     - *Implementation*: Click an image to open a full-screen modal with zoom/pan capabilities.
-13. [x] **Confirmation Dialogs** (Low Impact)
+13. [x] **Confirmation Dialogs** (Low Impact) - **VERIFIED**
     - *Description*: Prevent accidental deletions.
-    - *Implementation*: Use Radix `AlertDialog` for "Delete Project" actions.
-14. [x] **Copy Prompt to Clipboard** (Low Impact)
+    - *Implementation*: Replaced `window.confirm` with a custom Radix-based `AlertDialog` for project deletions and history pruning.
+14. [x] **Copy Prompt to Clipboard** (Low Impact) - **VERIFIED**
     - *Description*: Use prompts elsewhere.
-    - *Implementation*: A "Copy" button in the `PromptEditor`.
-15. [x] **Multi-Select Range** (Low Impact)
+    - *Implementation*: Added a copy button to the `PromptEditor` with visual feedback.
+15. [x] **Multi-Select Range** (Low Impact) - **VERIFIED**
     - *Description*: `Shift+Click` support.
-    - *Implementation*: Track the last selected index to allow range selection in the grid.
-16. [x] **Real-time Connectivity Toast** (Low Impact)
+    - *Implementation*: Implemented Shift+Click support in the `StagingGrid` for efficient batch selection.
+16. [x] **Real-time Connectivity Toast** (Low Impact) - **VERIFIED**
     - *Description*: Notify of offline status.
-    - *Implementation*: Use `window.addEventListener('offline')` to show a persistent warning.
-17. [x] **Module Previews (Before/After)** (Low Impact)
+    - *Implementation*: Integrated a global toast that monitors and alerts the user of their online/offline status.
+17. [x] **Module Previews (Before/After)** (Low Impact) - **VERIFIED**
     - *Description*: Show what a module does.
-    - *Implementation*: Hovering a module shows a small GIF or split-view of a sample result.
-18. [x] **Upload Queue Detail** (Low Impact)
+    - *Implementation*: Added a cinematic CSS split-view hover effect to module cards to simulate "Before/After" refinement.
+18. [x] **Upload Queue Detail** (Low Impact) - **VERIFIED**
     - *Description*: Transparency during ingestion.
-    - *Implementation*: A small popover showing "File 3 of 10 uploading..." with individual progress bars.
-19. [x] **Feedback Loop (Rating)** (Low Impact)
+    - *Implementation*: Implemented a persistent upload/optimization progress overlay with granular stats.
+19. [x] **Feedback Loop (Rating)** (Low Impact) - **VERIFIED**
     - *Description*: Help tune prompts.
-    - *Implementation*: Thumbs up/down on processed images; store results in a `feedback` table.
-20. [x] **Mobile Companion View** (Low Impact)
+    - *Implementation*: Added a feedback table to the database, backend API endpoints, and thumbs up/down UI for processed images.
+20. [x] **Mobile Companion View** (Low Impact) - **VERIFIED**
     - *Description*: Check status on the go.
-    - *Implementation*: A responsive layout that hides the editor but shows the grid and progress.
+    - *Implementation*: Refactored the sidebar into a responsive `Sheet` for mobile and optimized the layout for smaller screens.
 
 ---
 

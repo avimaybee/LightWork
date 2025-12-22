@@ -1,7 +1,4 @@
-import * as React from 'react';
-import { Loader2, CheckCircle2, FileUp } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Progress } from '@/components/ui/progress';
+import { Loader2, FileUp } from 'lucide-react';
 
 interface UploadQueueProps {
     current: number;

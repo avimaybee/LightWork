@@ -49,6 +49,16 @@ CREATE TABLE IF NOT EXISTS images (
   FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
 
+-- Feedback: User ratings for processed images
+CREATE TABLE IF NOT EXISTS feedback (
+  id TEXT PRIMARY KEY,
+  image_id TEXT NOT NULL,
+  rating INTEGER NOT NULL CHECK(rating IN (1, -1)),
+  comment TEXT,
+  created_at INTEGER DEFAULT (unixepoch()),
+  FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE
+);
+
 -- Indexes for efficient Cron Worker queries
 CREATE INDEX IF NOT EXISTS idx_images_status ON images(status);
 CREATE INDEX IF NOT EXISTS idx_images_job_id ON images(job_id);

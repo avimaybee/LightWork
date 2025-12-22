@@ -73,8 +73,18 @@ export interface ImageRecord {
     retry_count: number;
     file_size: number | null;
     mime_type: string | null;
+    rating?: number | null;
     created_at: number;
     processed_at: number | null;
+}
+
+// Feedback type
+export interface Feedback {
+    id: string;
+    image_id: string;
+    rating: 1 | -1;
+    comment: string | null;
+    created_at: number;
 }
 
 // API Response types
