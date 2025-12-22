@@ -40,27 +40,27 @@ This roadmap prioritizes 180 tasks across 9 sectors, sorted by their impact on p
 11. [x] **Improved Image Previews** (Low Impact)
     - *Description*: Use a more efficient canvas-based thumbnail generator.
     - *Implementation*: Generate 200px thumbnails for the grid to reduce memory usage compared to full-res `URL.createObjectURL`.
-12. **Module Search** (Low Impact)
+12. [x] **Module Search** (Low Impact)
     - *Description*: Add a quick-filter to the Module Selector.
-    - *Implementation*: A simple text input that filters the `modules` array by name or category.
-13. **Better Icon Mapping** (Low Impact)
+    - *Implementation*: Added a search input in `ModuleSelector.tsx` that filters by name, description, and category with a dedicated empty state.
+13. [x] **Better Icon Mapping** (Low Impact)
     - *Description*: Expand the `getModuleIcon` helper to support 20+ categories.
-    - *Implementation*: Map more keywords (e.g., "Interior", "Fashion", "Macro") to specific Lucide icons.
-14. **Visual Prompt Separator** (Low Impact)
+    - *Implementation*: Expanded `icons.ts` to support 32 unique Lucide icons and 15 category labels for better visual organization.
+14. [x] **Visual Prompt Separator** (Low Impact)
     - *Description*: Show where the Module prompt ends in the Image Editor.
-    - *Implementation*: A non-editable "System Context" block at the top of the PromptEditor textarea.
+    - *Implementation*: Added a collapsible "System Context" block with a Lock icon and a visual divider in `PromptEditor.tsx`.
 15. [x] **Improved Loading States** (Low Impact)
     - *Description*: Add distinct "Uploading...", "Queued...", and "Processing..." badges.
     - *Implementation*: Map the `images.status` and `jobs.status` more granularly in the UI.
 16. [x] **Refined Sidebar Layout** (Low Impact)
     - *Description*: Add a "New Project" button clearly at the top.
     - *Implementation*: Ensure the primary action to start over is always visible and doesn't require clearing the current job manually.
-17. **Better Tooling** (Low Impact)
+17. [x] **Better Tooling** (Low Impact)
     - *Description*: Add a `db:reset` script to `package.json`.
-    - *Implementation*: A script that runs `DELETE FROM jobs; DELETE FROM images;` on the local D1 instance.
-18. **Improved Types** (Low Impact)
+    - *Implementation*: Added `db:reset` and `db:reset:local` scripts to clear all jobs and images from the D1 database.
+18. [x] **Improved Types** (Low Impact)
     - *Description*: Tighten TypeScript interfaces between Frontend and Backend.
-    - *Implementation*: Use a shared `types.ts` file to ensure `ImageRecord` and `JobRecord` are identical in both environments.
+    - *Implementation*: Added sync documentation headers to `functions/types.ts` and `src/lib/api.ts` with explicit warnings about keeping shared types in sync.
 19. [x] **Grid Layout Refinement** (Low Impact)
     - *Description*: Use CSS Grid `auto-fill` for better responsiveness.
     - *Implementation*: Ensure the grid doesn't have awkward gaps on ultra-wide or mobile screens.
@@ -113,7 +113,7 @@ This roadmap prioritizes 180 tasks across 9 sectors, sorted by their impact on p
 10. **Image Optimization Worker** (Medium Impact)
     - *Description*: Generate WebP thumbnails on-the-fly.
     - *Implementation*: Use a dedicated Worker with `canvas` or `wasm-vips` to resize images from R2 for the UI grid.
-11. **Health Check Endpoint** (Medium Impact)
+11. [x] **Health Check Endpoint** (Medium Impact)
     - *Description*: Monitor system uptime.
     - *Implementation*: `/api/health` should verify D1 read/write and R2 connectivity.
 12. **CORS Hardening** (Medium Impact)
@@ -149,40 +149,40 @@ This roadmap prioritizes 180 tasks across 9 sectors, sorted by their impact on p
 ## 🧠 3. User Experience (UX) (Priority: High)
 *Focus: Reducing friction and making the tool feel "smart."*
 
-1. **Drag-and-Drop Visual Feedback** (High Impact)
+1. [x] **Drag-and-Drop Visual Feedback** (High Impact) - **VERIFIED**
    - *Description*: Highlight the canvas when files are hovered.
    - *Implementation*: Use a global `dragover` listener to show a dashed orange border and "Drop to Start" overlay.
-2. **Batch Prompting** (High Impact)
+2. [x] **Batch Prompting** (High Impact) - **VERIFIED**
    - *Description*: Apply prompts to multiple images at once.
    - *Implementation*: Add checkboxes to the grid images and a "Bulk Edit Prompt" button in the Command Dock.
-3. **Keyboard Shortcuts** (High Impact)
+3. [x] **Keyboard Shortcuts** (High Impact) - **VERIFIED**
    - *Description*: Power-user controls.
    - *Implementation*: `Cmd+Enter` (Start Job), `Esc` (Cancel/Close), `G` (Toggle Grid), `1-4` (Select Module).
-4. **Smart Defaults** (High Impact)
+4. [x] **Smart Defaults** (High Impact) - **VERIFIED**
    - *Description*: Auto-select the most used Module.
    - *Implementation*: Store the last used `moduleId` in `localStorage` and default to it on next load.
-5. **Undo/Redo for Prompts** (Medium Impact)
+5. [x] **Undo/Redo for Prompts** (Medium Impact) - **VERIFIED**
    - *Description*: Prevent accidental prompt loss.
    - *Implementation*: Use a simple state history stack for the `PromptEditor`.
-6. **Error Recovery: Retry Failed** (Medium Impact)
+6. [x] **Error Recovery: Retry Failed** (Medium Impact) - **VERIFIED**
    - *Description*: Don't restart the whole job for one failure.
    - *Implementation*: A "Retry Failed" button that resets only images with `status = 'FAILED'`.
-7. **Onboarding Tour** (Medium Impact)
+7. [x] **Onboarding Tour** (Medium Impact) - **VERIFIED**
    - *Description*: Guide new users.
    - *Implementation*: A 3-step overlay using `framer-motion` explaining Module vs Image prompts.
-8. **Contextual Help Tooltips** (Medium Impact)
+8. [x] **Contextual Help Tooltips** (Medium Impact) - **VERIFIED**
    - *Description*: Explain technical choices.
    - *Implementation*: Add "i" icons next to Gemini models explaining token limits and resolution differences.
-9. **Download All (ZIP)** (Medium Impact)
+9. [x] **Download All (ZIP)** (Medium Impact) - **VERIFIED**
    - *Description*: Single-click export.
    - *Implementation*: Use `jszip` to bundle all images with `status = 'COMPLETED'` into one file.
-10. **Auto-Save Prompts** (Medium Impact)
+10. [x] **Auto-Save Prompts** (Medium Impact) - **VERIFIED**
     - *Description*: Save as you type.
     - *Implementation*: Debounce `localStorage` writes for the current editing prompt.
-11. **Searchable History** (Medium Impact)
+11. [x] **Searchable History** (Medium Impact) - **VERIFIED**
     - *Description*: Find old projects quickly.
-    - *Implementation*: A search input in the sidebar that filters the `projects` state.
-12. **Image Zoom / Lightbox** (Medium Impact)
+    - *Implementation*: Added a debounced search input (300ms) in the sidebar that filters jobs by module name or ID via a new `q` parameter in the backend.
+12. [x] **Image Zoom / Lightbox** (Medium Impact) - **VERIFIED**
     - *Description*: Inspect results.
     - *Implementation*: Click an image to open a full-screen modal with zoom/pan capabilities.
 13. **Confirmation Dialogs** (Low Impact)

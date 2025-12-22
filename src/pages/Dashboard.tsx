@@ -1,27 +1,29 @@
 import * as React from 'react';
-import { 
-    Play, 
-    Download, 
-    X, 
+import {
+    Play,
+    Download,
+    X,
     Command,
     Clock,
     Loader2,
     Trash2,
+    RotateCcw,
 } from 'lucide-react';
 import { DropZone } from '@/components/DropZone';
 import { ModuleSelector } from '@/components/ModuleSelector';
 import { ModelSelector } from '@/components/ModelSelector';
 import { StagingGrid, type StagingImage } from '@/components/StagingGrid';
 import { PromptEditor } from '@/components/PromptEditor';
+import { Lightbox } from '@/components/Lightbox';
 import { useJobPolling } from '@/hooks/useJobPolling';
 import { useSessionRecovery } from '@/hooks/useSessionRecovery';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-    Dialog, 
-    DialogContent, 
-    DialogHeader, 
-    DialogTitle, 
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
     DialogDescription,
     DialogFooter
 } from '@/components/ui/dialog';
@@ -35,12 +37,14 @@ import {
     startJob,
     triggerProcessing,
     getDownloadUrl,
+    getImageUrl,
     getModule,
     deleteImage,
     updateImagePrompt,
     updateJobModel,
     updateModulePrompt,
     cleanupJobs,
+    retryJob,
     type Module,
     type ImageRecord,
     type GeminiModel,
@@ -84,6 +88,7 @@ export function Dashboard() {
     const [processingProgress, setProcessingProgress] = React.useState<string>('');
 
     const [projects, setProjects] = React.useState<JobWithModule[]>([]);
+    const [searchQuery, setSearchQuery] = React.useState('');
     const [hasMoreProjects, setHasMoreProjects] = React.useState(true);
     const [isLoadingProjects, setIsLoadingProjects] = React.useState(false);
     const PROJECTS_PAGE_SIZE = 20;
@@ -95,6 +100,7 @@ export function Dashboard() {
 
     // Prompt editor stats
     const [editingImageId, setEditingImageId] = React.useState<string | null>(null);
+    const [lightboxId, setLightboxId] = React.useState<string | null>(null);
 
     // Job polling
     const { job, connectionStatus, refetch } = useJobPolling({
@@ -127,30 +133,33 @@ export function Dashboard() {
     // Load projects (job history)
     const loadProjects = React.useCallback(async (reset = false) => {
         if (isLoadingProjects || (!hasMoreProjects && !reset)) return;
-        
+
         setIsLoadingProjects(true);
         try {
             const offset = reset ? 0 : projects.length;
-            const data = await getJobs(PROJECTS_PAGE_SIZE, offset);
-            
+            const data = await getJobs(PROJECTS_PAGE_SIZE, offset, searchQuery);
+
             if (reset) {
                 setProjects(data);
             } else {
                 setProjects(prev => [...prev, ...data]);
             }
-            
+
             setHasMoreProjects(data.length === PROJECTS_PAGE_SIZE);
         } catch {
             if (reset) setProjects([]);
         } finally {
             setIsLoadingProjects(false);
         }
-    }, [isLoadingProjects, hasMoreProjects, projects.length]);
+    }, [isLoadingProjects, hasMoreProjects, projects.length, searchQuery]);
 
+    // Debounced search effect
     React.useEffect(() => {
-        loadProjects(true);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        const timer = setTimeout(() => {
+            loadProjects(true);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // Intersection Observer for infinite scroll
     React.useEffect(() => {
@@ -202,7 +211,7 @@ export function Dashboard() {
             try {
                 const data = await getModules();
                 setModules(data);
-                
+
                 // If we don't have a module selected, pick one (prioritize recovered ID)
                 if (!selectedModule) {
                     const targetId = recoveredModuleId || (data.length > 0 ? data[0].id : null);
@@ -300,17 +309,17 @@ export function Dashboard() {
 
             worker.onmessage = (e) => {
                 const { success, data, error } = e.data;
-                
+
                 if (success) {
                     const result = data as ImageProcessResult;
-                    
+
                     // Create new File from processed blob
                     const processedFile = new File(
-                        [result.blob], 
-                        result.originalName, 
+                        [result.blob],
+                        result.originalName,
                         { type: 'image/jpeg', lastModified: Date.now() }
                     );
-                    
+
                     // Create thumbnail URL for immediate preview
                     const thumbnailUrl = URL.createObjectURL(result.thumbnail);
                     previewUrls.current.add(thumbnailUrl);
@@ -339,11 +348,11 @@ export function Dashboard() {
                     // Fallback to original file on error
                     processedCount++;
                     if (processedCount === files.length) {
-                         worker.terminate();
-                         resolve({
-                             items: files.map(f => ({ file: f, thumbnail: f })),
-                             thumbnails: files.map(f => ({ name: f.name, url: URL.createObjectURL(f) }))
-                         });
+                        worker.terminate();
+                        resolve({
+                            items: files.map(f => ({ file: f, thumbnail: f })),
+                            thumbnails: files.map(f => ({ name: f.name, url: URL.createObjectURL(f) }))
+                        });
                     }
                 }
             };
@@ -441,6 +450,20 @@ export function Dashboard() {
         }
     };
 
+    const handleRetry = async () => {
+        const id = jobId || activeJobId;
+        if (!id) return;
+
+        setAppState('PROCESSING');
+        try {
+            await retryJob(id);
+            triggerProcessing().catch(console.error);
+            refetch();
+        } catch {
+            setAppState('FAILED');
+        }
+    };
+
     const handleDownload = () => {
         const id = jobId || activeJobId;
         if (id) window.open(getDownloadUrl(id), '_blank');
@@ -516,20 +539,33 @@ export function Dashboard() {
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-4">
                         <h2 className="font-display font-extrabold text-xs tracking-widest uppercase text-[var(--color-ink-sub)]">Archive</h2>
                         <div className="flex items-center gap-1.5">
                             <div className={cn(
-                                "w-1.5 h-1.5 rounded-full", 
+                                "w-1.5 h-1.5 rounded-full",
                                 !isOnline ? "bg-red-500" :
-                                connectionStatus === 'reconnecting' ? "bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.5)]" :
-                                "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                                    connectionStatus === 'reconnecting' ? "bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.5)]" :
+                                        "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                             )} />
                             <span className="text-[10px] font-mono font-bold uppercase tracking-tighter">
                                 {!isOnline ? "Offline" :
-                                 connectionStatus === 'reconnecting' ? "Reconnecting..." :
-                                 "System Online"}
+                                    connectionStatus === 'reconnecting' ? "Reconnecting..." :
+                                        "System Online"}
                             </span>
+                        </div>
+                    </div>
+
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Search projects..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full h-10 pl-10 pr-4 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-border)] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all"
+                        />
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-ink-sub)]">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
                         </div>
                     </div>
                 </div>
@@ -537,14 +573,16 @@ export function Dashboard() {
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
                     {projects.length === 0 && !isLoadingProjects && (
                         <div className="p-8 text-center">
-                            <p className="text-xs font-mono text-[var(--color-ink-sub)] uppercase tracking-widest opacity-50">No projects found</p>
+                            <p className="text-xs font-mono text-[var(--color-ink-sub)] uppercase tracking-widest opacity-50">
+                                {searchQuery ? 'No matches found' : 'No projects found'}
+                            </p>
                         </div>
                     )}
 
                     {projects.map((p) => {
                         const Icon = getModuleIcon(p.module_icon);
                         const isSelected = (jobId || activeJobId) === p.id;
-                        
+
                         return (
                             <button
                                 key={p.id}
@@ -552,8 +590,8 @@ export function Dashboard() {
                                 disabled={isProcessing}
                                 className={cn(
                                     "w-full text-left p-4 rounded-2xl transition-all duration-300 group relative overflow-hidden",
-                                    isSelected 
-                                        ? "bg-[var(--color-accent-sub)] border border-[var(--color-accent)]/20 shadow-sm" 
+                                    isSelected
+                                        ? "bg-[var(--color-accent-sub)] border border-[var(--color-accent)]/20 shadow-sm"
                                         : "hover:bg-[var(--color-canvas)] border border-transparent"
                                 )}
                             >
@@ -574,32 +612,32 @@ export function Dashboard() {
                                             </p>
                                         </div>
                                     </div>
-                                    <Badge 
-                                        variant="outline" 
+                                    <Badge
+                                        variant="outline"
                                         className={cn(
                                             "h-5 px-2 rounded-full text-[9px] font-black tracking-widest uppercase border-none",
-                                            p.status === 'COMPLETED' ? "bg-emerald-100 text-emerald-700" : 
-                                            p.status === 'PROCESSING' ? "bg-blue-100 text-blue-700 animate-pulse" : 
-                                            p.status === 'FAILED' ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"
+                                            p.status === 'COMPLETED' ? "bg-emerald-100 text-emerald-700" :
+                                                p.status === 'PROCESSING' ? "bg-blue-100 text-blue-700 animate-pulse" :
+                                                    p.status === 'FAILED' ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"
                                         )}
                                     >
                                         {p.status}
                                     </Badge>
                                 </div>
-                                
+
                                 {/* Subtle hover effect */}
                                 <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-accent)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                             </button>
                         );
                     })}
-                    
+
                     <div ref={observerTarget} className="h-10 flex items-center justify-center">
                         {isLoadingProjects && <Loader2 className="w-5 h-5 animate-spin text-[var(--color-accent)]" />}
                     </div>
                 </div>
 
                 <div className="p-6 border-t border-[var(--color-border)] bg-[var(--color-canvas)]/50 flex flex-col gap-2">
-                    <Button 
+                    <Button
                         onClick={handleNewSession}
                         disabled={isProcessing}
                         className="w-full h-12 rounded-2xl bg-[var(--color-ink)] hover:bg-[var(--color-accent)] text-white font-display font-bold tracking-tight transition-all shadow-xl shadow-black/5 group"
@@ -607,7 +645,7 @@ export function Dashboard() {
                         <Play className="w-4 h-4 mr-2 fill-current group-hover:scale-110 transition-transform" />
                         New Project
                     </Button>
-                    <Button 
+                    <Button
                         variant="ghost"
                         onClick={handleCleanup}
                         className="w-full h-10 rounded-xl text-[10px] font-bold tracking-widest uppercase text-[var(--color-ink-sub)] hover:text-red-500 hover:bg-red-50 transition-all"
@@ -620,7 +658,7 @@ export function Dashboard() {
 
             {/* MAIN STAGE */}
             <main className="flex-1 relative flex flex-col min-w-0 overflow-hidden">
-                
+
                 {/* TOP BAR */}
                 <header className="h-20 border-b border-[var(--color-border)] bg-white/80 backdrop-blur-xl flex items-center justify-between px-10 sticky top-0 z-10">
                     <div className="flex items-center gap-6">
@@ -648,14 +686,14 @@ export function Dashboard() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <ModelSelector 
-                            value={selectedModel} 
-                            onChange={setSelectedModel} 
-                            disabled={isProcessing || isComplete || (job?.status !== 'PENDING' && !!job)} 
+                        <ModelSelector
+                            value={selectedModel}
+                            onChange={setSelectedModel}
+                            disabled={isProcessing || isComplete || (job?.status !== 'PENDING' && !!job)}
                         />
-                        
+
                         {isComplete && (
-                            <Button 
+                            <Button
                                 onClick={handleDownload}
                                 className="h-11 px-6 rounded-2xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-display font-bold shadow-lg shadow-[var(--color-accent)]/20"
                             >
@@ -668,7 +706,7 @@ export function Dashboard() {
 
                 {/* CANVAS CONTENT */}
                 <div className="flex-1 overflow-y-auto p-10 pb-32 custom-scrollbar bg-[var(--color-canvas)]">
-                    
+
                     {/* Empty State / Drop Target */}
                     {localImages.length === 0 && !job && (
                         <div className="h-full flex flex-col items-center justify-center animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -678,10 +716,10 @@ export function Dashboard() {
                                         <h3 className="font-display font-extrabold text-3xl tracking-tight">Choose Intelligence</h3>
                                         <p className="text-[var(--color-ink-sub)] font-medium">Select a specialized module for your task.</p>
                                     </div>
-                                    <ModuleSelector 
-                                        modules={modules} 
-                                        selectedId={selectedModule?.id || null} 
-                                        onSelect={handleModuleSelect} 
+                                    <ModuleSelector
+                                        modules={modules}
+                                        selectedId={selectedModule?.id || null}
+                                        onSelect={handleModuleSelect}
                                         disabled={isProcessing || isComplete || displayImages.length > 0 || !!(jobId || activeJobId)}
                                     />
                                 </section>
@@ -710,7 +748,7 @@ export function Dashboard() {
                     {/* Staging Grid (Active) */}
                     {(displayImages.length > 0 || job) && (
                         <div className="max-w-7xl mx-auto space-y-12 animate-in fade-in duration-500">
-                            
+
                             {/* Workflow Prompt (Module System Prompt) */}
                             {selectedModule?.system_prompt && (
                                 <div className="glass-panel noise-overlay rounded-[32px] p-8 shadow-2xl shadow-black/5 border border-white/50">
@@ -757,7 +795,7 @@ export function Dashboard() {
                 {displayImages.length > 0 && (
                     <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-3xl px-6 z-30 animate-in slide-in-from-bottom-8 duration-700">
                         <div className="glass-panel noise-overlay p-4 rounded-[28px] shadow-2xl border border-white/50 flex items-center justify-between gap-4">
-                            
+
                             {/* Left: Context */}
                             <div className="flex-1 flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-2xl bg-[var(--color-canvas)] flex items-center justify-center border border-[var(--color-border)]">
@@ -784,15 +822,15 @@ export function Dashboard() {
                             <div className="flex items-center gap-3">
                                 {!isProcessing && !isComplete && (
                                     <>
-                                        <Button 
-                                            variant="ghost" 
-                                            size="icon" 
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
                                             onClick={handleNewSession}
                                             className="w-12 h-12 rounded-2xl hover:bg-white text-[var(--color-ink-sub)] hover:text-red-500 transition-colors"
                                         >
                                             <X className="w-5 h-5" />
                                         </Button>
-                                        <Button 
+                                        <Button
                                             className="h-12 px-8 rounded-2xl bg-[var(--color-ink)] hover:bg-[var(--color-accent)] text-white font-display font-bold shadow-xl shadow-black/10 group transition-all hover:scale-105 active:scale-95"
                                             onClick={handleStart}
                                             disabled={!jobId && !activeJobId}
@@ -804,14 +842,24 @@ export function Dashboard() {
 
                                 {isComplete && (
                                     <>
-                                        <Button 
-                                            variant="outline" 
-                                            onClick={handleNewSession} 
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleNewSession}
                                             className="h-12 px-6 rounded-2xl font-bold border-[var(--color-border)] hover:bg-white"
                                         >
                                             New Session
                                         </Button>
-                                        <Button 
+                                        {appState === 'FAILED' && (
+                                            <Button
+                                                variant="outline"
+                                                onClick={handleRetry}
+                                                className="h-12 px-6 rounded-2xl font-bold border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                                            >
+                                                <RotateCcw className="w-4 h-4 mr-2" />
+                                                Retry Failed
+                                            </Button>
+                                        )}
+                                        <Button
                                             className="h-12 px-8 rounded-2xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-display font-bold shadow-lg shadow-[var(--color-accent)]/20"
                                             onClick={handleDownload}
                                         >
@@ -869,14 +917,14 @@ export function Dashboard() {
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="flex gap-3 mt-6">
-                        <Button 
-                            variant="outline" 
+                        <Button
+                            variant="outline"
                             onClick={handleDiscardSession}
                             className="flex-1 h-12 rounded-2xl border-[var(--color-border)] hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold"
                         >
                             Discard
                         </Button>
-                        <Button 
+                        <Button
                             onClick={handleResumeSession}
                             className="flex-1 h-12 rounded-2xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white shadow-lg shadow-[var(--color-accent)]/20 font-bold"
                         >
@@ -885,6 +933,35 @@ export function Dashboard() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Lightbox */}
+            {lightboxId && (() => {
+                const imgIndex = displayImages.findIndex(img => img.id === lightboxId);
+                const img = displayImages[imgIndex];
+                if (!img) return null;
+
+                const hasPrev = imgIndex > 0;
+                const hasNext = imgIndex < displayImages.length - 1;
+
+                const url = img.localPreview
+                    ? img.localPreview
+                    : img.status === 'COMPLETED'
+                        ? getImageUrl(img.id, 'processed')
+                        : getImageUrl(img.id, 'original');
+
+                return (
+                    <Lightbox
+                        isOpen={!!lightboxId}
+                        onClose={() => setLightboxId(null)}
+                        imageSrc={url}
+                        altText={img.original_filename || 'Preview'}
+                        hasPrev={hasPrev}
+                        hasNext={hasNext}
+                        onPrev={() => hasPrev && setLightboxId(displayImages[imgIndex - 1].id)}
+                        onNext={() => hasNext && setLightboxId(displayImages[imgIndex + 1].id)}
+                    />
+                );
+            })()}
         </div>
     );
 }

@@ -1,11 +1,17 @@
 /**
  * LightWork API Client
  * Frontend API integration layer
+ * 
+ * ⚠️ SYNC REQUIRED: Core types must match the backend definitions in:
+ *    - functions/types.ts
+ * 
+ * Shared types: Module, Job, ImageRecord, JobStatus, ImageStatus, GeminiModel
+ * When modifying these, ensure both files are updated together.
  */
 
 const API_BASE = '/api';
 
-// Types matching backend
+// Types matching backend (see functions/types.ts)
 export interface Module {
     id: string;
     name: string;
@@ -120,15 +126,16 @@ export async function updateModulePrompt(id: string, systemPrompt: string): Prom
 }
 
 // Jobs
-export async function getJobs(limit?: number, offset?: number): Promise<JobWithModule[]> {
+export async function getJobs(limit?: number, offset?: number, search?: string): Promise<JobWithModule[]> {
     let url = '/jobs';
     const params = new URLSearchParams();
     if (limit !== undefined) params.append('limit', limit.toString());
     if (offset !== undefined) params.append('offset', offset.toString());
-    
+    if (search) params.append('q', search);
+
     const queryString = params.toString();
     if (queryString) url += `?${queryString}`;
-    
+
     return request(url);
 }
 
@@ -147,6 +154,13 @@ export async function startJob(id: string): Promise<Job> {
     return request(`/jobs/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ action: 'start' }),
+    });
+}
+
+export async function retryJob(id: string): Promise<Job> {
+    return request(`/jobs/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'retry' }),
     });
 }
 
@@ -199,7 +213,7 @@ export async function deleteJob(id: string): Promise<void> {
 
 // Images
 export async function uploadImages(
-    jobId: string, 
+    jobId: string,
     items: { file: File; thumbnail: Blob }[]
 ): Promise<{ uploaded: number; images: ImageRecord[] }> {
     const formData = new FormData();

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { getModuleIcon, categoryLabels } from '@/lib/icons';
+import { Search, X } from 'lucide-react';
 import type { Module } from '@/lib/api';
 
 interface ModuleSelectorProps {
@@ -18,9 +19,25 @@ export function ModuleSelector({
     disabled = false,
     className,
 }: ModuleSelectorProps) {
+    const [searchQuery, setSearchQuery] = React.useState('');
+
+    // Filter modules by name, description, or category
+    const filteredModules = React.useMemo(() => {
+        if (!searchQuery.trim()) return modules;
+
+        const query = searchQuery.toLowerCase().trim();
+        return modules.filter((module) =>
+            module.name.toLowerCase().includes(query) ||
+            (module.description?.toLowerCase().includes(query)) ||
+            (module.category?.toLowerCase().includes(query)) ||
+            (categoryLabels[module.category || '']?.toLowerCase().includes(query))
+        );
+    }, [modules, searchQuery]);
+
+    // Group filtered modules by category
     const groupedModules = React.useMemo(() => {
         const groups: Record<string, Module[]> = {};
-        modules.forEach((module) => {
+        filteredModules.forEach((module) => {
             const category = module.category || 'general';
             if (!groups[category]) {
                 groups[category] = [];
@@ -28,12 +45,55 @@ export function ModuleSelector({
             groups[category].push(module);
         });
         return groups;
-    }, [modules]);
+    }, [filteredModules]);
 
     const categories = Object.keys(groupedModules);
 
     return (
-        <div className={cn('space-y-12', className)}>
+        <div className={cn('space-y-8', className)}>
+            {/* Search Input */}
+            <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--color-ink-sub)]" />
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search modules..."
+                    disabled={disabled}
+                    className={cn(
+                        'w-full pl-12 pr-12 py-4 rounded-2xl',
+                        'text-base font-medium',
+                        'bg-white border border-[var(--color-border)]',
+                        'text-[var(--color-ink)] placeholder:text-[var(--color-ink-sub)]/50',
+                        'focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)]',
+                        'transition-all duration-300',
+                        disabled && 'opacity-50 cursor-not-allowed'
+                    )}
+                />
+                {searchQuery && (
+                    <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[var(--color-canvas)] hover:bg-[var(--color-border)] flex items-center justify-center transition-colors"
+                    >
+                        <X className="w-4 h-4 text-[var(--color-ink-sub)]" />
+                    </button>
+                )}
+            </div>
+
+            {/* Empty State */}
+            {filteredModules.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-[var(--color-canvas)] flex items-center justify-center mb-4">
+                        <Search className="w-8 h-8 text-[var(--color-ink-sub)]/50" />
+                    </div>
+                    <p className="text-lg font-semibold text-[var(--color-ink)]">No modules found</p>
+                    <p className="text-sm text-[var(--color-ink-sub)] mt-1">
+                        Try a different search term
+                    </p>
+                </div>
+            )}
+
+            {/* Module Grid */}
             {categories.map((category) => (
                 <div key={category} className="space-y-6">
                     <div className="flex items-center gap-4 px-2">
@@ -56,7 +116,7 @@ export function ModuleSelector({
                                     className={cn(
                                         'group relative flex flex-col p-6 rounded-[24px] transition-all duration-500 text-left overflow-hidden',
                                         'border border-[var(--color-border)]',
-                                        
+
                                         // Interaction
                                         disabled
                                             ? 'opacity-50 cursor-not-allowed'
@@ -70,7 +130,7 @@ export function ModuleSelector({
                                 >
                                     {/* Background Noise Overlay */}
                                     <div className="absolute inset-0 noise-overlay opacity-[0.03] pointer-events-none" />
-                                    
+
                                     <div className="flex items-start justify-between mb-6 relative z-10">
                                         <div
                                             className={cn(
@@ -80,7 +140,7 @@ export function ModuleSelector({
                                         >
                                             <Icon className="w-6 h-6" />
                                         </div>
-                                        
+
                                         {isSelected && (
                                             <div className="w-6 h-6 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center shadow-lg animate-scale-in">
                                                 <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
@@ -113,3 +173,4 @@ export function ModuleSelector({
         </div>
     );
 }
+

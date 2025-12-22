@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { X, MessageSquare, Check, AlertCircle, Loader2, Clock, Trash2, CheckSquare, Square } from 'lucide-react';
+import { X, MessageSquare, Check, AlertCircle, Loader2, Clock, Trash2, CheckSquare, Square, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getImageUrl, type ImageStatus } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,8 @@ interface StagingGridProps {
     onRemoveMultiple?: (ids: string[]) => void;
     onClearAll?: () => void;
     onEditPrompt?: (id: string) => void;
+    onBulkEditPrompt?: (ids: string[]) => void;
+    onView?: (id: string) => void;
     showStatus?: boolean;
     className?: string;
     disabled?: boolean;
@@ -40,6 +42,8 @@ export function StagingGrid({
     onRemoveMultiple,
     onClearAll,
     onEditPrompt,
+    onBulkEditPrompt,
+    onView,
     showStatus = false,
     className,
     disabled = false,
@@ -174,6 +178,18 @@ export function StagingGrid({
                                     "absolute inset-0 flex items-center justify-center gap-2 transition-all duration-300 bg-black/10 backdrop-blur-[2px]",
                                     isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                                 )}>
+                                    {onView && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onView(image.id);
+                                            }}
+                                            className="w-11 h-11 rounded-2xl bg-white border border-white/50 flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl text-[var(--color-ink)]"
+                                            title="View Fullscreen"
+                                        >
+                                            <Eye className="w-5 h-5" />
+                                        </button>
+                                    )}
                                     {onEditPrompt && canEdit && (
                                         <button
                                             onClick={(e) => {
@@ -254,6 +270,18 @@ export function StagingGrid({
                         </div>
                         
                         <div className="flex items-center gap-2">
+                            {onBulkEditPrompt && (
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => onBulkEditPrompt(Array.from(selectedIds))}
+                                    className="h-9 px-4 text-[10px] font-bold tracking-widest uppercase rounded-full bg-white text-[var(--color-ink)] hover:bg-[var(--color-accent)] hover:text-white transition-colors"
+                                >
+                                    <MessageSquare className="w-3.5 h-3.5 mr-2" />
+                                    Edit Prompts
+                                </Button>
+                            )}
+
                             <Button
                                 variant="ghost"
                                 size="sm"

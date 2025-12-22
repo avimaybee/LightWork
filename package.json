@@ -11,13 +11,16 @@
     "pages:dev": "npm run build && npx wrangler pages dev ./dist",
     "pages:deploy": "npm run build && npx wrangler pages deploy ./dist",
     "db:migrate": "npx wrangler d1 execute bananabatch-db --file=./schema.sql",
-    "db:migrate:local": "npx wrangler d1 execute bananabatch-db --file=./schema.sql --local"
+    "db:migrate:local": "npx wrangler d1 execute bananabatch-db --file=./schema.sql --local",
+    "db:reset": "npx wrangler d1 execute bananabatch-db --command=\"DELETE FROM images; DELETE FROM jobs;\"",
+    "db:reset:local": "npx wrangler d1 execute bananabatch-db --command=\"DELETE FROM images; DELETE FROM jobs;\" --local"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-progress": "^1.1.8",
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tooltip": "^1.2.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "jszip": "^3.10.1",

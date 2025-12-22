@@ -78,6 +78,24 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
             await env.DB.prepare(
                 `UPDATE jobs SET status = 'PROCESSING', started_at = ?, updated_at = ? WHERE id = ?`
             ).bind(now, now, jobId).run();
+        } else if (body.action === 'retry') {
+            // Reset FAILED images to PENDING
+            const { meta } = await env.DB.prepare(
+                `UPDATE images SET status = 'PENDING', error_message = NULL, retry_count = retry_count + 1 WHERE job_id = ? AND status = 'FAILED'`
+            ).bind(jobId).run();
+
+            const recoveredCount = meta.changes ?? 0;
+            
+            if (recoveredCount > 0) {
+                // Update job counts and status
+                await env.DB.prepare(
+                    `UPDATE jobs SET 
+                        failed_images = failed_images - ?, 
+                        status = 'PROCESSING', 
+                        updated_at = ? 
+                     WHERE id = ?`
+                ).bind(recoveredCount, now, jobId).run();
+            }
         } else if (body.action === 'cancel') {
             await env.DB.prepare(
                 `UPDATE jobs SET status = 'CANCELLED', updated_at = ? WHERE id = ?`

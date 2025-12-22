@@ -1,3 +1,13 @@
+/**
+ * Backend Type Definitions
+ * 
+ * ⚠️ SYNC REQUIRED: These types must match the frontend definitions in:
+ *    - src/lib/api.ts
+ * 
+ * When modifying shared types (Module, Job, ImageRecord, JobStatus, ImageStatus, GeminiModel),
+ * ensure both files are updated together to prevent type mismatches.
+ */
+
 // Cloudflare Workers Environment Type Definitions
 
 export interface Env {

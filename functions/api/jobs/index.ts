@@ -11,15 +11,25 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const url = new URL(request.url);
     const limit = parseInt(url.searchParams.get('limit') || '50');
     const offset = parseInt(url.searchParams.get('offset') || '0');
+    const search = url.searchParams.get('q');
 
     try {
-        const { results } = await env.DB.prepare(
-            `SELECT j.*, m.name as module_name, m.icon as module_icon
-       FROM jobs j
-       JOIN modules m ON j.module_id = m.id
-       ORDER BY j.created_at DESC
-       LIMIT ? OFFSET ?`
-        ).bind(limit, offset).all<JobWithModule>();
+        let query = `
+            SELECT j.*, m.name as module_name, m.icon as module_icon
+            FROM jobs j
+            JOIN modules m ON j.module_id = m.id
+        `;
+        const params: (string | number)[] = [];
+
+        if (search) {
+            query += ` WHERE m.name LIKE ? OR j.id LIKE ? `;
+            params.push(`%${search}%`, `%${search}%`);
+        }
+
+        query += ` ORDER BY j.created_at DESC LIMIT ? OFFSET ? `;
+        params.push(limit, offset);
+
+        const { results } = await env.DB.prepare(query).bind(...params).all<JobWithModule>();
 
         const response: ApiResponse<JobWithModule[]> = {
             success: true,
