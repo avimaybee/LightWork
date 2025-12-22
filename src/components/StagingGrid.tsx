@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { X, MessageSquare, Check, AlertCircle, Loader2, Clock, Trash2, CheckSquare, Square, Eye } from 'lucide-react';
+import { X, MessageSquare, Check, AlertCircle, Loader2, Clock, Trash2, CheckSquare, Square, Eye, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getImageUrl, type ImageStatus } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ export type StagingImage = {
     specific_prompt?: string | null;
     error_message?: string | null;
     thumbnail_key?: string | null;
+    rating?: number | null;
 };
 
 interface StagingGridProps {
@@ -23,6 +24,7 @@ interface StagingGridProps {
     onEditPrompt?: (id: string) => void;
     onBulkEditPrompt?: (ids: string[]) => void;
     onView?: (id: string) => void;
+    onFeedback?: (id: string, rating: 1 | -1) => void;
     showStatus?: boolean;
     className?: string;
     disabled?: boolean;
@@ -44,20 +46,38 @@ export function StagingGrid({
     onEditPrompt,
     onBulkEditPrompt,
     onView,
+    onFeedback,
     showStatus = false,
     className,
     disabled = false,
 }: StagingGridProps) {
     const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+    const [lastSelectedIndex, setLastSelectedIndex] = React.useState<number | null>(null);
 
     if (images.length === 0) return null;
 
-    const toggleSelect = (id: string) => {
+    const toggleSelect = (id: string, index: number, shiftKey: boolean) => {
         if (disabled) return;
-        const next = new Set(selectedIds);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        setSelectedIds(next);
+
+        // Shift+Click for range selection
+        if (shiftKey && lastSelectedIndex !== null) {
+            const start = Math.min(lastSelectedIndex, index);
+            const end = Math.max(lastSelectedIndex, index);
+            const rangeIds = images.slice(start, end + 1).map(img => img.id);
+            const next = new Set(selectedIds);
+            rangeIds.forEach(rangeId => next.add(rangeId));
+            setSelectedIds(next);
+        } else {
+            // Normal toggle
+            const next = new Set(selectedIds);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            setSelectedIds(next);
+            setLastSelectedIndex(index);
+        }
     };
 
     const toggleSelectAll = () => {
@@ -140,19 +160,19 @@ export function StagingGrid({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-8">
                 {images.map((image, index) => {
                     const status = statusConfig[image.status];
-                    const imageUrl = image.localPreview 
-                        ? image.localPreview 
-                        : image.thumbnail_key 
-                            ? getImageUrl(image.id, 'thumbnail') 
+                    const imageUrl = image.localPreview
+                        ? image.localPreview
+                        : image.thumbnail_key
+                            ? getImageUrl(image.id, 'thumbnail')
                             : getImageUrl(image.id, 'original');
-                    
+
                     const isSelected = selectedIds.has(image.id);
                     const canEdit = image.status === 'PENDING' || image.status === 'RETRY_LATER';
 
                     return (
                         <div
                             key={image.id || index}
-                            onClick={() => canPrune && toggleSelect(image.id)}
+                            onClick={(e) => canPrune && toggleSelect(image.id, index, e.shiftKey)}
                             className={cn(
                                 'group relative aspect-[4/5.2] p-3 bg-white cursor-pointer',
                                 'rounded-[24px] border border-[var(--color-border)] shadow-subtle',
@@ -212,6 +232,38 @@ export function StagingGrid({
                                             <X className="w-5 h-5" />
                                         </button>
                                     )}
+                                    {image.status === 'COMPLETED' && onFeedback && (
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onFeedback(image.id, 1);
+                                                }}
+                                                className={cn(
+                                                    "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shadow-xl",
+                                                    image.rating === 1 
+                                                        ? "bg-emerald-500 border-emerald-600 text-white scale-110" 
+                                                        : "bg-white border-white/50 text-[var(--color-ink)] hover:scale-110 hover:text-emerald-600"
+                                                )}
+                                            >
+                                                <ThumbsUp className="w-5 h-5" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onFeedback(image.id, -1);
+                                                }}
+                                                className={cn(
+                                                    "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shadow-xl",
+                                                    image.rating === -1 
+                                                        ? "bg-red-500 border-red-600 text-white scale-110" 
+                                                        : "bg-white border-white/50 text-[var(--color-ink)] hover:scale-110 hover:text-red-600"
+                                                )}
+                                            >
+                                                <ThumbsDown className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    )}
                                     {isSelected && (
                                         <div className="absolute top-3 left-3 w-7 h-7 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center shadow-xl animate-scale-in">
                                             <Check className="w-4 h-4 stroke-[3]" />
@@ -226,7 +278,7 @@ export function StagingGrid({
                                     <span className="font-mono text-[10px] font-bold tracking-tighter truncate max-w-[100px] text-[var(--color-ink-sub)] uppercase">
                                         {image.original_filename}
                                     </span>
-                                    
+
                                     {showStatus && (
                                         <Badge
                                             variant="default"
@@ -268,7 +320,7 @@ export function StagingGrid({
                             </div>
                             <span className="text-xs font-bold tracking-tight uppercase">Assets Selected</span>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                             {onBulkEditPrompt && (
                                 <Button
@@ -290,7 +342,7 @@ export function StagingGrid({
                             >
                                 {selectedIds.size === images.length ? 'Deselect All' : 'Select All'}
                             </Button>
-                            
+
                             <Button
                                 variant="destructive"
                                 size="sm"
@@ -302,7 +354,7 @@ export function StagingGrid({
                             </Button>
                         </div>
 
-                        <button 
+                        <button
                             onClick={() => setSelectedIds(new Set())}
                             className="p-1 hover:bg-white/10 rounded-full transition-colors"
                         >

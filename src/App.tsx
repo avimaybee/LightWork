@@ -1,6 +1,7 @@
 import { Dashboard } from '@/pages/Dashboard';
 import { GlobalDragOverlay } from '@/components/GlobalDragOverlay';
 import { OnboardingTour } from '@/components/OnboardingTour';
+import { ConnectivityToast } from '@/components/ConnectivityToast';
 import './index.css';
 
 function App() {
@@ -9,6 +10,7 @@ function App() {
       <Dashboard />
       <GlobalDragOverlay />
       <OnboardingTour />
+      <ConnectivityToast />
     </>
   );
 }

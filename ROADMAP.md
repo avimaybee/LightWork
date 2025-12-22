@@ -185,28 +185,28 @@ This roadmap prioritizes 180 tasks across 9 sectors, sorted by their impact on p
 12. [x] **Image Zoom / Lightbox** (Medium Impact) - **VERIFIED**
     - *Description*: Inspect results.
     - *Implementation*: Click an image to open a full-screen modal with zoom/pan capabilities.
-13. **Confirmation Dialogs** (Low Impact)
+13. [x] **Confirmation Dialogs** (Low Impact)
     - *Description*: Prevent accidental deletions.
     - *Implementation*: Use Radix `AlertDialog` for "Delete Project" actions.
-14. **Copy Prompt to Clipboard** (Low Impact)
+14. [x] **Copy Prompt to Clipboard** (Low Impact)
     - *Description*: Use prompts elsewhere.
     - *Implementation*: A "Copy" button in the `PromptEditor`.
-15. **Multi-Select Range** (Low Impact)
+15. [x] **Multi-Select Range** (Low Impact)
     - *Description*: `Shift+Click` support.
     - *Implementation*: Track the last selected index to allow range selection in the grid.
-16. **Real-time Connectivity Toast** (Low Impact)
+16. [x] **Real-time Connectivity Toast** (Low Impact)
     - *Description*: Notify of offline status.
     - *Implementation*: Use `window.addEventListener('offline')` to show a persistent warning.
-17. **Module Previews (Before/After)** (Low Impact)
+17. [x] **Module Previews (Before/After)** (Low Impact)
     - *Description*: Show what a module does.
     - *Implementation*: Hovering a module shows a small GIF or split-view of a sample result.
-18. **Upload Queue Detail** (Low Impact)
+18. [x] **Upload Queue Detail** (Low Impact)
     - *Description*: Transparency during ingestion.
     - *Implementation*: A small popover showing "File 3 of 10 uploading..." with individual progress bars.
-19. **Feedback Loop (Rating)** (Low Impact)
+19. [x] **Feedback Loop (Rating)** (Low Impact)
     - *Description*: Help tune prompts.
     - *Implementation*: Thumbs up/down on processed images; store results in a `feedback` table.
-20. **Mobile Companion View** (Low Impact)
+20. [x] **Mobile Companion View** (Low Impact)
     - *Description*: Check status on the go.
     - *Implementation*: A responsive layout that hides the editor but shows the grid and progress.
 

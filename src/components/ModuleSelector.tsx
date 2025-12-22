@@ -128,10 +128,28 @@ export function ModuleSelector({
                                             : 'bg-white/50 backdrop-blur-sm'
                                     )}
                                 >
-                                    {/* Background Noise Overlay */}
-                                    <div className="absolute inset-0 noise-overlay opacity-[0.03] pointer-events-none" />
-
-                                    <div className="flex items-start justify-between mb-6 relative z-10">
+                                                                        {/* Background Noise Overlay */}
+                                                                        <div className="absolute inset-0 noise-overlay opacity-[0.03] pointer-events-none" />
+                                                                        
+                                                                        {/* Hover Preview Overlay */}
+                                                                        <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none overflow-hidden">
+                                                                            <div className="absolute inset-0 flex">
+                                                                                <div className="flex-1 bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center overflow-hidden grayscale">
+                                                                                    <Icon className="w-24 h-24 text-slate-400/20 rotate-12 scale-150" />
+                                                                                </div>
+                                                                                <div className="w-0.5 bg-white/50 h-full relative z-10" />
+                                                                                <div className="flex-1 bg-gradient-to-br from-[var(--color-accent)]/10 to-[var(--color-accent)]/20 flex items-center justify-center overflow-hidden">
+                                                                                    <Icon className="w-24 h-24 text-[var(--color-accent)]/10 -rotate-12 scale-150" />
+                                                                                </div>
+                                                                            </div>
+                                                                            {/* "Result" Label */}
+                                                                            <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur px-2 py-1 rounded-md shadow-sm border border-slate-200 transform translate-y-8 group-hover:translate-y-0 transition-transform duration-500 delay-100">
+                                                                                <span className="text-[8px] font-mono font-black uppercase tracking-tighter text-[var(--color-accent)]">Optimized Result</span>
+                                                                            </div>
+                                                                        </div>
+                                    
+                                                                        <div className="flex items-start justify-between mb-6 relative z-10 group-hover:opacity-0 transition-opacity duration-300">
+                                    
                                         <div
                                             className={cn(
                                                 "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500",

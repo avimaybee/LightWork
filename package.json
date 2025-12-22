@@ -16,6 +16,7 @@
     "db:reset:local": "npx wrangler d1 execute bananabatch-db --command=\"DELETE FROM images; DELETE FROM jobs;\" --local"
   },
   "dependencies": {
+    "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-progress": "^1.1.8",
     "@radix-ui/react-scroll-area": "^1.2.10",

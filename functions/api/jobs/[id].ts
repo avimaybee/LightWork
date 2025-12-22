@@ -21,8 +21,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         }
 
         const { results: images } = await env.DB.prepare(
-            'SELECT * FROM images WHERE job_id = ? ORDER BY created_at ASC'
-        ).bind(jobId).all<ImageRecord>();
+            `SELECT i.*, f.rating 
+             FROM images i 
+             LEFT JOIN (
+                SELECT image_id, rating, MAX(created_at) as max_at 
+                FROM feedback 
+                GROUP BY image_id
+             ) f ON i.id = f.image_id
+             WHERE i.job_id = ? 
+             ORDER BY i.created_at ASC`
+        ).bind(jobId).all<ImageRecord & { rating: number | null }>();
 
         const response: ApiResponse<JobWithImages> = {
             success: true,

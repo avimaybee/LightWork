@@ -15,19 +15,41 @@ import { ModelSelector } from '@/components/ModelSelector';
 import { StagingGrid, type StagingImage } from '@/components/StagingGrid';
 import { PromptEditor } from '@/components/PromptEditor';
 import { Lightbox } from '@/components/Lightbox';
+import { ProjectArchive } from '@/components/ProjectArchive';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { UploadQueue } from '@/components/UploadQueue';
 import { useJobPolling } from '@/hooks/useJobPolling';
 import { useSessionRecovery } from '@/hooks/useSessionRecovery';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogHeader, 
+    DialogTitle, 
     DialogDescription,
     DialogFooter
 } from '@/components/ui/dialog';
+import { 
+    Sheet, 
+    SheetContent, 
+    SheetHeader, 
+    SheetTitle,
+    SheetTrigger
+} from '@/components/ui/sheet';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
+import { Menu } from 'lucide-react';
+
 import { getModuleIcon } from '@/lib/icons';
 import {
     getModules,
@@ -86,6 +108,20 @@ export function Dashboard() {
     const [jobId, setJobId] = React.useState<string | null>(null);
     const [isOnline, setIsOnline] = React.useState(navigator.onLine);
     const [processingProgress, setProcessingProgress] = React.useState<string>('');
+    const [uploadStats, setUploadStats] = React.useState({ current: 0, total: 0 });
+
+    const [showConfirmDialog, setShowConfirmDialog] = React.useState(false);
+    const [confirmOptions, setConfirmOptions] = React.useState<{
+        title: string;
+        description: string;
+        variant?: 'default' | 'destructive';
+        confirmLabel?: string;
+        onConfirm: () => void;
+    }>({
+        title: '',
+        description: '',
+        onConfirm: () => { },
+    });
 
     const [projects, setProjects] = React.useState<JobWithModule[]>([]);
     const [searchQuery, setSearchQuery] = React.useState('');
@@ -347,6 +383,8 @@ export function Dashboard() {
                     console.error('Worker error:', error);
                     // Fallback to original file on error
                     processedCount++;
+                    setUploadStats(prev => ({ ...prev, current: processedCount }));
+
                     if (processedCount === files.length) {
                         worker.terminate();
                         resolve({
@@ -375,6 +413,7 @@ export function Dashboard() {
 
         setAppState('UPLOADING');
         setProcessingProgress('Initializing...');
+        setUploadStats({ current: 0, total: files.length });
 
         try {
             let id = jobId;
@@ -497,6 +536,18 @@ export function Dashboard() {
         }
     };
 
+    const handleFeedback = async (imageId: string, rating: 1 | -1) => {
+        try {
+            await submitFeedback(imageId, rating);
+            // Optimistically update if needed or just wait for polling.
+            // Since we don't have local ratings state easily accessible for job images,
+            // we can just refetch.
+            refetch();
+        } catch (error) {
+            console.error('Failed to submit feedback:', error);
+        }
+    };
+
     const handleNewSession = () => {
         const id = jobId || activeJobId;
 
@@ -514,154 +565,101 @@ export function Dashboard() {
         setAppState('SETUP');
     };
 
-    const handleCleanup = async () => {
-        if (!confirm('This will delete all projects older than 24 hours. Continue?')) return;
-        try {
-            await cleanupJobs();
-            loadProjects(true);
-        } catch (error) {
-            console.error('Cleanup failed:', error);
-        }
+    const handleCleanup = () => {
+        setConfirmOptions({
+            title: 'Prune History',
+            description: 'This will delete all projects older than 24 hours. This action cannot be undone.',
+            variant: 'destructive',
+            confirmLabel: 'Prune All',
+            onConfirm: async () => {
+                try {
+                    await cleanupJobs();
+                    loadProjects(true);
+                } catch (error) {
+                    console.error('Cleanup failed:', error);
+                }
+            }
+        });
+        setShowConfirmDialog(true);
+    };
+
+    const handleProjectDelete = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        setConfirmOptions({
+            title: 'Delete Project',
+            description: 'Are you sure you want to delete this project? All associated images will be permanently removed.',
+            variant: 'destructive',
+            confirmLabel: 'Delete',
+            onConfirm: async () => {
+                try {
+                    await deleteJob(id);
+                    if (jobId === id) {
+                        handleNewSession();
+                    }
+                    loadProjects(true);
+                } catch (error) {
+                    console.error('Delete failed:', error);
+                }
+            }
+        });
+        setShowConfirmDialog(true);
     };
 
     return (
         <div className="flex h-screen bg-[var(--color-canvas)] text-[var(--color-ink)] overflow-hidden selection:bg-[var(--color-accent)] selection:text-white">
-            {/* Sidebar: Project Archive */}
-            <aside className="w-80 border-r border-[var(--color-border)] bg-white flex flex-col relative z-20 shadow-2xl">
-                <div className="p-8 border-b border-[var(--color-border)] bg-white/50 backdrop-blur-xl sticky top-0 z-10">
-                    <div className="flex items-center gap-3 mb-8">
-                        <div className="w-10 h-10 rounded-2xl bg-[var(--color-accent)] flex items-center justify-center shadow-lg shadow-[var(--color-accent)]/20 rotate-3">
-                            <Command className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="font-display font-black text-xl tracking-tight leading-none">LIGHTWORK</h1>
-                            <p className="text-[10px] font-mono font-bold text-[var(--color-accent)] tracking-[0.2em] mt-1 uppercase">Visual Intelligence</p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="font-display font-extrabold text-xs tracking-widest uppercase text-[var(--color-ink-sub)]">Archive</h2>
-                        <div className="flex items-center gap-1.5">
-                            <div className={cn(
-                                "w-1.5 h-1.5 rounded-full",
-                                !isOnline ? "bg-red-500" :
-                                    connectionStatus === 'reconnecting' ? "bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.5)]" :
-                                        "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                            )} />
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-tighter">
-                                {!isOnline ? "Offline" :
-                                    connectionStatus === 'reconnecting' ? "Reconnecting..." :
-                                        "System Online"}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="relative">
-                        <input
-                            type="text"
-                            placeholder="Search projects..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full h-10 pl-10 pr-4 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-border)] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all"
-                        />
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-ink-sub)]">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
-                    {projects.length === 0 && !isLoadingProjects && (
-                        <div className="p-8 text-center">
-                            <p className="text-xs font-mono text-[var(--color-ink-sub)] uppercase tracking-widest opacity-50">
-                                {searchQuery ? 'No matches found' : 'No projects found'}
-                            </p>
-                        </div>
-                    )}
-
-                    {projects.map((p) => {
-                        const Icon = getModuleIcon(p.module_icon);
-                        const isSelected = (jobId || activeJobId) === p.id;
-
-                        return (
-                            <button
-                                key={p.id}
-                                onClick={() => handleProjectSelect(p)}
-                                disabled={isProcessing}
-                                className={cn(
-                                    "w-full text-left p-4 rounded-2xl transition-all duration-300 group relative overflow-hidden",
-                                    isSelected
-                                        ? "bg-[var(--color-accent-sub)] border border-[var(--color-accent)]/20 shadow-sm"
-                                        : "hover:bg-[var(--color-canvas)] border border-transparent"
-                                )}
-                            >
-                                <div className="flex items-start justify-between mb-2 relative z-10">
-                                    <div className="flex items-center gap-2">
-                                        <div className={cn(
-                                            "w-8 h-8 rounded-xl flex items-center justify-center transition-colors",
-                                            isSelected ? "bg-[var(--color-accent)] text-white" : "bg-[var(--color-canvas)] text-[var(--color-ink-sub)] group-hover:bg-white"
-                                        )}>
-                                            <Icon className="w-4 h-4" />
-                                        </div>
-                                        <div>
-                                            <p className="font-display font-bold text-sm tracking-tight line-clamp-1">
-                                                {p.module_name || 'Untitled Project'}
-                                            </p>
-                                            <p className="text-[10px] font-mono text-[var(--color-ink-sub)] font-medium">
-                                                {new Date(p.created_at * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Badge
-                                        variant="outline"
-                                        className={cn(
-                                            "h-5 px-2 rounded-full text-[9px] font-black tracking-widest uppercase border-none",
-                                            p.status === 'COMPLETED' ? "bg-emerald-100 text-emerald-700" :
-                                                p.status === 'PROCESSING' ? "bg-blue-100 text-blue-700 animate-pulse" :
-                                                    p.status === 'FAILED' ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"
-                                        )}
-                                    >
-                                        {p.status}
-                                    </Badge>
-                                </div>
-
-                                {/* Subtle hover effect */}
-                                <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-accent)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </button>
-                        );
-                    })}
-
-                    <div ref={observerTarget} className="h-10 flex items-center justify-center">
-                        {isLoadingProjects && <Loader2 className="w-5 h-5 animate-spin text-[var(--color-accent)]" />}
-                    </div>
-                </div>
-
-                <div className="p-6 border-t border-[var(--color-border)] bg-[var(--color-canvas)]/50 flex flex-col gap-2">
-                    <Button
-                        onClick={handleNewSession}
-                        disabled={isProcessing}
-                        className="w-full h-12 rounded-2xl bg-[var(--color-ink)] hover:bg-[var(--color-accent)] text-white font-display font-bold tracking-tight transition-all shadow-xl shadow-black/5 group"
-                    >
-                        <Play className="w-4 h-4 mr-2 fill-current group-hover:scale-110 transition-transform" />
-                        New Project
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        onClick={handleCleanup}
-                        className="w-full h-10 rounded-xl text-[10px] font-bold tracking-widest uppercase text-[var(--color-ink-sub)] hover:text-red-500 hover:bg-red-50 transition-all"
-                    >
-                        <Trash2 className="w-3.5 h-3.5 mr-2" />
-                        Prune History
-                    </Button>
-                </div>
+            {/* Desktop Sidebar: Project Archive */}
+            <aside className="hidden xl:flex w-80 border-r border-[var(--color-border)] bg-white flex-col relative z-20 shadow-2xl">
+                <ProjectArchive
+                    projects={projects}
+                    activeJobId={jobId || activeJobId}
+                    isOnline={isOnline}
+                    connectionStatus={connectionStatus}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    onProjectSelect={handleProjectSelect}
+                    onNewProject={handleNewSession}
+                    onCleanup={handleCleanup}
+                    onProjectDelete={handleProjectDelete}
+                    isLoadingProjects={isLoadingProjects}
+                    hasMoreProjects={hasMoreProjects}
+                    observerTarget={observerTarget}
+                    isProcessing={isProcessing}
+                />
             </aside>
 
             {/* MAIN STAGE */}
             <main className="flex-1 relative flex flex-col min-w-0 overflow-hidden">
 
                 {/* TOP BAR */}
-                <header className="h-20 border-b border-[var(--color-border)] bg-white/80 backdrop-blur-xl flex items-center justify-between px-10 sticky top-0 z-10">
-                    <div className="flex items-center gap-6">
+                <header className="h-20 border-b border-[var(--color-border)] bg-white/80 backdrop-blur-xl flex items-center justify-between px-4 md:px-10 sticky top-0 z-10">
+                    <div className="flex items-center gap-4 md:gap-6">
+                        {/* Mobile Archive Trigger */}
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <Button variant="ghost" size="icon" className="xl:hidden h-11 w-11 rounded-xl hover:bg-[var(--color-canvas)]">
+                                    <Menu className="w-6 h-6" />
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent side="left" className="p-0 w-80 border-r border-[var(--color-border)]">
+                                <ProjectArchive
+                                    projects={projects}
+                                    activeJobId={jobId || activeJobId}
+                                    isOnline={isOnline}
+                                    connectionStatus={connectionStatus}
+                                    searchQuery={searchQuery}
+                                    onSearchChange={setSearchQuery}
+                                    onProjectSelect={handleProjectSelect}
+                                    onNewProject={handleNewSession}
+                                    onCleanup={handleCleanup}
+                                    onProjectDelete={handleProjectDelete}
+                                    isLoadingProjects={isLoadingProjects}
+                                    hasMoreProjects={hasMoreProjects}
+                                    observerTarget={observerTarget}
+                                    isProcessing={isProcessing}
+                                />
+                            </SheetContent>
+                        </Sheet>
+
                         <div className="flex flex-col">
                             <h2 className="font-display font-black text-2xl tracking-tight">
                                 {selectedModule?.name || 'Select Module'}
@@ -751,7 +749,7 @@ export function Dashboard() {
 
                             {/* Workflow Prompt (Module System Prompt) */}
                             {selectedModule?.system_prompt && (
-                                <div className="glass-panel noise-overlay rounded-[32px] p-8 shadow-2xl shadow-black/5 border border-white/50">
+                                <div className="hidden xl:block glass-panel noise-overlay rounded-[32px] p-8 shadow-2xl shadow-black/5 border border-white/50">
                                     <div className="flex items-start justify-between gap-4 mb-6">
                                         <div className="min-w-0">
                                             <h2 className="font-display font-extrabold text-2xl text-[var(--color-ink)] tracking-tight">Workflow Logic</h2>
@@ -784,6 +782,9 @@ export function Dashboard() {
                                 onRemoveMultiple={handleRemoveMultipleImages}
                                 onClearAll={handleClearAllImages}
                                 onEditPrompt={canEditPrompts ? setEditingImageId : undefined}
+                                onBulkEditPrompt={canEditPrompts ? handleBulkEditPrompt : undefined}
+                                onView={setLightboxId}
+                                onFeedback={handleFeedback}
                                 showStatus={isProcessing || isComplete}
                                 disabled={isProcessing}
                             />
@@ -962,6 +963,21 @@ export function Dashboard() {
                     />
                 );
             })()}
+
+            {/* Upload Queue Overlay */}
+            {appState === 'UPLOADING' && uploadStats.total > 0 && (
+                <UploadQueue
+                    current={uploadStats.current}
+                    total={uploadStats.total}
+                    stage={processingProgress === 'Uploading...' ? 'uploading' : 'optimizing'}
+                />
+            )}
+
+            <ConfirmDialog
+                open={showConfirmDialog}
+                onOpenChange={setShowConfirmDialog}
+                {...confirmOptions}
+            />
         </div>
     );
 }

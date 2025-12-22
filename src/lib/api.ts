@@ -251,6 +251,17 @@ export async function deleteImage(id: string): Promise<void> {
     });
 }
 
+export async function submitFeedback(imageId: string, rating: 1 | -1, comment?: string): Promise<void> {
+    return request(`/images/${imageId}/feedback`, {
+        method: 'POST',
+        body: JSON.stringify({ rating, comment }),
+    });
+}
+
+export async function getFeedback(imageId: string): Promise<any> {
+    return request(`/images/${imageId}/feedback`);
+}
+
 export function getImageUrl(imageId: string, type: 'original' | 'processed' | 'thumbnail'): string {
     return `${API_BASE}/images/${imageId}/${type}`;
 }

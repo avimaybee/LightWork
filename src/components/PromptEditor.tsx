@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Lock, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 
 interface PromptEditorProps {
     isOpen: boolean;
@@ -99,6 +99,17 @@ export function PromptEditor({
         onClose();
     };
 
+    const [copied, setCopied] = React.useState(false);
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(value);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    };
+
     return (
         <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <SheetContent side="bottom" className="h-[70vh] rounded-t-2xl">
@@ -118,7 +129,7 @@ export function PromptEditor({
                             title="Undo (Ctrl+Z)"
                         >
                             <span className="sr-only">Undo</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
                         </Button>
                         <Button
                             variant="ghost"
@@ -129,7 +140,19 @@ export function PromptEditor({
                             title="Redo (Ctrl+Y)"
                         >
                             <span className="sr-only">Redo</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
+                        </Button>
+                        <div className="w-px h-4 bg-border mx-1" />
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCopy}
+                            disabled={!value}
+                            className={cn("h-8 w-8 p-0 transition-colors", copied && "text-emerald-600")}
+                            title="Copy to Clipboard"
+                        >
+                            <span className="sr-only">Copy</span>
+                            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                         </Button>
                     </div>
                 </SheetHeader>
