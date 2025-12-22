@@ -45,7 +45,7 @@ export function PromptEditor({
             <SheetContent side="bottom" className="h-[60vh] rounded-t-2xl">
                 <SheetHeader className="mb-4">
                     <SheetTitle
-                        className="text-lg font-semibold text-[var(--color-text-primary)]"
+                        className="text-lg font-semibold text-foreground"
                     >
                         {title}
                     </SheetTitle>
@@ -60,8 +60,9 @@ export function PromptEditor({
                         className={cn(
                             'flex-1 w-full p-4 rounded-xl resize-none',
                             'text-base leading-relaxed',
-                            'focus:outline-none focus:ring-2 focus:ring-[var(--color-line)]',
-                            'bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] border border-[var(--color-border)]',
+                            'bg-background text-foreground border border-border',
+                            'placeholder:text-muted-foreground/70',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
                             className
                         )}
                     />
@@ -70,13 +71,13 @@ export function PromptEditor({
                         <Button
                             variant="outline"
                             onClick={onClose}
-                            className="flex-1 h-12 text-[var(--color-text-secondary)] border-[var(--color-border)]"
+                            className="flex-1 h-12 text-muted-foreground"
                         >
                             Cancel
                         </Button>
                         <Button
                             onClick={handleSave}
-                            className="flex-1 h-12 bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
+                            className="flex-1 h-12"
                         >
                             Save
                         </Button>
@@ -107,14 +108,14 @@ export function GlobalPromptEditor({
         <div className={cn('space-y-2', className)}>
             <div className="flex items-center justify-between">
                 <label
-                    className="text-sm font-medium text-[var(--color-text-secondary)]"
+                    className="text-sm font-medium text-muted-foreground"
                 >
                     Additional Instructions (optional)
                 </label>
                 {modulePromptPreview && (
                     <button
                         onClick={() => setIsExpanded(!isExpanded)}
-                        className="text-xs hover:underline text-[var(--color-primary)]"
+                        className="text-xs hover:underline text-foreground"
                     >
                         {isExpanded ? 'Hide' : 'View'} module prompt
                     </button>
@@ -123,7 +124,7 @@ export function GlobalPromptEditor({
 
             {isExpanded && modulePromptPreview && (
                 <div
-                    className="p-3 rounded-lg text-xs max-h-32 overflow-y-auto bg-[var(--color-surface-elevated)] text-[var(--color-text-muted)] border border-[var(--color-border)]/20"
+                    className="p-3 rounded-lg text-xs max-h-32 overflow-y-auto bg-muted text-muted-foreground border border-border/60"
                 >
                     <pre className="whitespace-pre-wrap font-mono">
                         {modulePromptPreview}
@@ -139,14 +140,11 @@ export function GlobalPromptEditor({
                 className={cn(
                     'w-full p-3 rounded-xl resize-none',
                     'text-sm leading-relaxed',
-                    'border focus:outline-none focus:border-primary',
-                    'transition-colors'
+                    'bg-surface text-foreground border border-border',
+                    'placeholder:text-muted-foreground/70',
+                    'transition-colors',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
                 )}
-                style={{
-                    backgroundColor: 'var(--color-surface)',
-                    color: 'var(--color-text-primary)',
-                    borderColor: 'var(--color-border)',
-                }}
             />
         </div>
     );

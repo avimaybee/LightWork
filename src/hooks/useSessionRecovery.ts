@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 const STORAGE_KEY = 'lightwork_active_job';
 
@@ -8,30 +8,24 @@ interface StoredSession {
 }
 
 export function useSessionRecovery() {
-    const [activeJobId, setActiveJobId] = useState<string | null>(null);
-    const [hasRecoveredSession, setHasRecoveredSession] = useState(false);
-
-    // Check for existing session on mount
-    useEffect(() => {
+    const [activeJobId, setActiveJobId] = useState<string | null>(() => {
         try {
             const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                const session: StoredSession = JSON.parse(stored);
-                // Only recover sessions less than 24 hours old
-                const isRecent = Date.now() - session.createdAt < 24 * 60 * 60 * 1000;
-                if (isRecent && session.jobId) {
-                    setActiveJobId(session.jobId);
-                    setHasRecoveredSession(true);
-                } else {
-                    // Clear stale session
-                    localStorage.removeItem(STORAGE_KEY);
-                }
-            }
-        } catch {
-            // Invalid stored data
+            if (!stored) return null;
+
+            const session: StoredSession = JSON.parse(stored);
+            const isRecent = Date.now() - session.createdAt < 24 * 60 * 60 * 1000;
+            if (isRecent && session.jobId) return session.jobId;
+
             localStorage.removeItem(STORAGE_KEY);
+            return null;
+        } catch {
+            localStorage.removeItem(STORAGE_KEY);
+            return null;
         }
-    }, []);
+    });
+
+    const [hasRecoveredSession, setHasRecoveredSession] = useState(() => !!activeJobId);
 
     // Save session
     const saveSession = useCallback((jobId: string) => {

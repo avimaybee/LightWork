@@ -29,7 +29,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         }
 
         return new Response(object.body, { headers });
-    } catch (error) {
+    } catch {
         return new Response('Failed to fetch image', { status: 500 });
     }
 };

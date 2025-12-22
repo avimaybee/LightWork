@@ -21,11 +21,11 @@ interface StagingGridProps {
 }
 
 const statusConfig = {
-    PENDING: { icon: Clock, label: 'WAIT', bg: 'bg-[var(--color-muted)]', text: 'text-[var(--color-foreground)]' },
-    PROCESSING: { icon: Loader2, label: 'BUSY', bg: 'bg-[var(--color-primary)]', text: 'text-[var(--color-foreground)]' },
-    COMPLETED: { icon: Check, label: 'DONE', bg: 'bg-[var(--color-mint)]', text: 'text-[var(--color-foreground)]' },
+    PENDING: { icon: Clock, label: 'WAIT', bg: 'bg-muted', text: 'text-foreground' },
+    PROCESSING: { icon: Loader2, label: 'BUSY', bg: 'bg-accent-sub', text: 'text-foreground' },
+    COMPLETED: { icon: Check, label: 'DONE', bg: 'bg-secondary', text: 'text-foreground' },
     FAILED: { icon: AlertCircle, label: 'ERR', bg: 'bg-red-500', text: 'text-white' },
-    RETRY_LATER: { icon: Clock, label: 'RETRY', bg: 'bg-yellow-400', text: 'text-black' },
+    RETRY_LATER: { icon: Clock, label: 'RETRY', bg: 'bg-secondary', text: 'text-foreground' },
 };
 
 export function StagingGrid({
@@ -39,9 +39,9 @@ export function StagingGrid({
 
     return (
         <div className={cn('space-y-6', className)}>
-            <div className="flex items-center justify-between pb-4 border-b-2 border-dashed border-black/10">
-                <h3 className="font-display font-bold text-xl text-black">
-                    Staging Area <span className="ml-2 text-sm font-mono text-black/50">[{images.length}]</span>
+            <div className="flex items-center justify-between pb-4 border-b border-dashed border-border">
+                <h3 className="font-display font-bold text-xl text-foreground">
+                    Staging Area <span className="ml-2 text-sm font-mono text-muted-foreground">[{images.length}]</span>
                 </h3>
             </div>
 
@@ -55,20 +55,20 @@ export function StagingGrid({
                         <div
                             key={image.id || index}
                             className={cn(
-                                'group relative aspect-[4/5] p-2 bg-white',
-                                'rounded-[20px] border-2 border-[var(--color-line)]',
-                                'shadow-[4px_4px_0px_0px_var(--color-line)]',
-                                'transition-all duration-300 hover:-translate-y-2 hover:shadow-[8px_8px_0px_0px_var(--color-line)]'
+                                'group relative aspect-[4/5] p-2 bg-surface',
+                                'rounded-[20px] border border-border shadow-sm',
+                                'interactive-card',
+                                'animate-slide-up motion-reduce:animate-none'
                             )}
                             style={{ animationDelay: `${index * 50}ms` }}
                         >
                             {/* Polaroid Image Area */}
-                            <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[var(--color-muted)] border border-[var(--color-line)]/10">
+                            <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-muted border border-border">
                                 {imageUrl && (
                                     <img
                                         src={imageUrl}
                                         alt={image.original_filename || `Image ${index + 1}`}
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                         loading="lazy"
                                     />
                                 )}
@@ -78,7 +78,7 @@ export function StagingGrid({
                                     {onEditPrompt && image.status === 'PENDING' && (
                                         <button
                                             onClick={() => onEditPrompt(image.id)}
-                                            className="w-10 h-10 rounded-xl bg-white border-2 border-black flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+                                            className="w-10 h-10 rounded-xl bg-white/90 border border-white/50 flex items-center justify-center hover:scale-105 transition-transform shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                         >
                                             <MessageSquare className="w-5 h-5" />
                                         </button>
@@ -86,7 +86,7 @@ export function StagingGrid({
                                     {onRemove && image.status === 'PENDING' && (
                                         <button
                                             onClick={() => onRemove(image.id)}
-                                            className="w-10 h-10 rounded-xl bg-red-500 border-2 border-black flex items-center justify-center hover:scale-110 transition-transform shadow-sm text-white"
+                                            className="w-10 h-10 rounded-xl bg-red-500 border border-red-600 flex items-center justify-center hover:scale-105 transition-transform shadow-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                         >
                                             <X className="w-5 h-5" />
                                         </button>
@@ -96,7 +96,7 @@ export function StagingGrid({
 
                             {/* Caption Area */}
                             <div className="mt-3 px-1 flex items-center justify-between">
-                                <span className="font-mono text-[10px] font-bold truncate max-w-[80px] text-[var(--color-text-muted)]">
+                                <span className="font-mono text-[10px] font-bold truncate max-w-[80px] text-muted-foreground">
                                     {image.original_filename}
                                 </span>
 
@@ -104,7 +104,7 @@ export function StagingGrid({
                                     <Badge
                                         variant="default"
                                         className={cn(
-                                            "h-5 px-1.5 rounded-md border-black bg-white text-[9px] tracking-wider",
+                                            "h-5 px-2 rounded-full border-border text-[9px] tracking-wider",
                                             status.bg, status.text
                                         )}
                                     >
@@ -116,8 +116,8 @@ export function StagingGrid({
 
                             {/* Prompt Indicator Sticker */}
                             {image.specific_prompt && (
-                                <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-[var(--color-yellow)] border-2 border-[var(--color-line)] flex items-center justify-center z-10 shadow-sm" title="Custom Prompt Active">
-                                    <MessageSquare className="w-3 h-3 text-black" />
+                                <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-accent border border-white/40 flex items-center justify-center z-10 shadow-sm" title="Custom Prompt Active">
+                                    <MessageSquare className="w-3 h-3 text-white" />
                                 </div>
                             )}
                         </div>

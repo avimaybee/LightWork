@@ -1,117 +1,92 @@
 # ✨ LightWork
 
-> AI-powered batch image processing using Google's Gemini Nano Banana models
+> **Cinematic Utility AI Image Processor**  
+> High-fidelity batch image refinement using Google's Gemini Nano Banana models.
 
-Transform your images in bulk using AI. Upload multiple images, select an enhancement module, and let Gemini do the rest.
+![LightWork V4 Interface](https://placehold.co/1200x675/F3F4F6/111827?text=LightWork+V4+Interface)
 
-## Features
+LightWork is a professional-grade batch processing tool designed for speed and precision. It leverages a modern "Cinematic Utility" aesthetic to provide a focused, distraction-free environment for enhancing hundreds of images at once.
 
-- **Batch Processing** - Upload up to 50 images at once
-- **AI Enhancement Modules** - Food plating, product backgrounds, portraits, real estate
-- **Two AI Models** - Fast (free) or Pro (paid, higher quality)
-- **Real-time Progress** - Watch your images process with live status updates
-- **ZIP Download** - Download all processed images in one click
+## 🚀 Key Features
 
-## Tech Stack
+### 🎨 Cinematic Utility UI
+- **Split-Screen Workspace:** Dedicated sidebar for navigation and a massive canvas for asset management.
+- **Luminous Stone Theme:** A sophisticated palette of warm grays (#F3F4F6), crisp whites, and "International Orange" (#FF4F00) accents.
+- **Projects History:** A persistent sidebar list of previous batches, allowing for seamless session recovery and result review.
+- **Glassmorphic Command Dock:** A floating control center that keeps your workspace clutter-free.
+- **Fluid Motion:** Spring-physics based animations for a premium feel.
 
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS
-- **Backend**: Cloudflare Pages Functions
-- **Database**: Cloudflare D1 (SQLite)
-- **Storage**: Cloudflare R2
-- **AI**: Google Gemini API (image generation)
+### ⚡ Production-Grade Engine
+- **2-Prompt Rule:** Simplified prompt composition using only Module-level and Image-level instructions for maximum precision.
+- **Immediate Ingestion:** Jobs are created and images are uploaded to R2 as soon as they are dropped, enabling faster workflows.
+- **Parallel Processing:** Handles images concurrently using `Promise.allSettled` to beat serverless timeouts.
+- **Smart Concurrency:** Adaptive batch sizing (2 images) to stay within 128MB memory limits.
+- **Resilient Architecture:** "Zombie Job" detection automatically recovers stalled tasks if a worker crashes.
 
-## Quick Start
+### 🧠 AI Capabilities
+- **Fast Mode (Nano Banana):** High-throughput, cost-effective processing for drafts.
+- **Pro Mode (Nano Banana Pro):** Maximum fidelity up to 4K resolution for final delivery.
+- **Specialized Modules:** Pre-tuned workflows for Food, Product, Portrait, and Real Estate.
+
+## 🛠️ Tech Stack
+
+- **Frontend:** React 19, TypeScript, Tailwind CSS, Lucide Icons
+- **Design System:** Custom "Cinematic Utility" tokens (Manrope/Inter fonts)
+- **Backend:** Cloudflare Pages Functions (Serverless)
+- **Database:** Cloudflare D1 (SQLite)
+- **Storage:** Cloudflare R2 (Object Storage)
+- **AI Provider:** Google Gemini API (Gemini 2.5 Flash Image)
+
+## 🏁 Quick Start
 
 ### Prerequisites
-
 - Node.js 18+
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
-- Cloudflare account with D1 and R2 set up
-- Gemini API key
+- Cloudflare Account (Workers, D1, R2 enabled)
+- Google Gemini API Key
 
-### Local Development
+### Local Setup
 
 ```bash
-# Install dependencies
+# 1. Clone & Install
+git clone https://github.com/your-username/lightwork.git
+cd lightwork
 npm install
 
-# Create .dev.vars with your Gemini API key
+# 2. Configure Environment
 cp .dev.vars.example .dev.vars
-# Edit .dev.vars and add your GEMINI_API_KEY
+# Add your GEMINI_API_KEY to .dev.vars
 
-# IMPORTANT: Apply database schema locally (required before first run!)
+# 3. Initialize Database (Crucial!)
 npm run db:migrate:local
 
-# Start dev server with Pages Functions
+# 4. Start Development Server
 npm run pages:dev
 ```
 
-Visit `http://localhost:8788` to use the app.
-
-> ⚠️ **Troubleshooting:** If images stay "PENDING" forever, you likely forgot to run `npm run db:migrate:local`. Stop the server, run the migration, then restart.
+Visit `http://localhost:8788` to launch the app.
 
 ### Deployment
 
 ```bash
-# Build frontend
-npm run build
-
-# Apply schema to remote D1
-npm run db:migrate
-
 # Deploy to Cloudflare Pages
 npm run pages:deploy
 ```
 
-## AI Models
+## 📐 Architecture
 
-| Model | Description | Output | Cost |
-|-------|-------------|--------|------|
-| **Fast** (Nano Banana) | High-volume batch processing | 1024px | Free |
-| **Pro** (Nano Banana Pro) | Professional quality output | Up to 4K | Paid |
+LightWork uses an **on-demand, client-driven** processing model to circumvent serverless execution limits.
 
-## Project Structure
+1.  **Ingestion:** User drops files -> Uploads to R2 -> Creates 'PENDING' records in D1.
+2.  **Orchestration:** Client polls status -> Triggers `/api/process` endpoint if items are pending.
+3.  **Execution:**
+    *   `/api/process` claims a batch of images (atomic DB lock).
+    *   Images are processed in **parallel** (limited concurrency).
+    *   Results are streamed back to R2.
+    *   Status updated to 'COMPLETED'.
+4.  **Recovery:** If a worker dies, the "Zombie Cleanup" logic resets stuck images after 5 minutes.
 
-```
-LightWork/
-├── src/                    # Frontend (React)
-│   ├── components/         # UI components
-│   ├── hooks/              # Custom React hooks
-│   ├── lib/                # API client & utilities
-│   └── pages/              # Page components
-├── functions/              # Backend (Cloudflare Pages Functions)
-│   ├── api/                # API endpoints
-│   └── lib/                # Gemini service & processor
-├── schema.sql              # D1 database schema
-├── migrations/             # Database migrations
-└── wrangler.toml           # Cloudflare configuration
-```
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for deep technical details.
 
-## Environment Variables
+## 📄 License
 
-| Variable | Description |
-|----------|-------------|
-| `GEMINI_API_KEY` | Your Google Gemini API key |
-
-For local development, add to `.dev.vars`. For production, set in Cloudflare Pages dashboard.
-
-> **Note:** The app was renamed from "BananaBatch" to "LightWork". The D1 database (`bananabatch-db`) and R2 bucket (`bananabatch-storage`) retain the original names to preserve existing data and avoid migration.
-
-## Available Scripts
-
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start Vite dev server (frontend only) |
-| `npm run pages:dev` | Start full stack with Pages Functions |
-| `npm run build` | Build for production |
-| `npm run pages:deploy` | Deploy to Cloudflare Pages |
-| `npm run db:migrate` | Apply schema to remote D1 |
-| `npm run db:migrate:local` | Apply schema locally |
-
-## Architecture
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed technical documentation.
-
-## License
-
-MIT
+MIT © 2025 LightWork

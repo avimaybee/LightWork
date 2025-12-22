@@ -55,7 +55,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     const jobId = params.id as string;
 
     try {
-        const body = await request.json() as { action?: string; global_prompt?: string };
+        const body = await request.json() as { action?: string; global_prompt?: string; model?: string };
 
         const job = await env.DB.prepare(
             'SELECT * FROM jobs WHERE id = ?'
@@ -94,6 +94,30 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
                     `UPDATE jobs SET failed_images = failed_images + ?, updated_at = ? WHERE id = ?`
                 ).bind(cancelledCount, now, jobId).run();
             }
+        } else if (body.model !== undefined) {
+            if (job.status !== 'PENDING') {
+                return new Response(JSON.stringify({
+                    success: false,
+                    error: 'Can only update model for pending jobs',
+                }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            }
+
+            if (body.model !== 'nano_banana' && body.model !== 'nano_banana_pro') {
+                return new Response(JSON.stringify({
+                    success: false,
+                    error: 'Invalid model',
+                }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            }
+
+            await env.DB.prepare(
+                `UPDATE jobs SET model = ?, updated_at = ? WHERE id = ?`
+            ).bind(body.model, now, jobId).run();
         } else if (body.global_prompt !== undefined) {
             await env.DB.prepare(
                 `UPDATE jobs SET global_prompt = ?, updated_at = ? WHERE id = ?`

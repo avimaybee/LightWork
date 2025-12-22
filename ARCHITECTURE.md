@@ -1,355 +1,129 @@
-# LightWork - Technical Documentation
+# LightWork - Technical Architecture (V4)
 
-> AI-powered batch image processing using Google's Gemini Nano Banana models
+> **Design System:** Cinematic Utility  
+> **Engine:** Parallel Serverless Processing
 
-## Overview
+## 1. Design Philosophy: "Cinematic Utility"
 
-LightWork is a web application that allows users to batch process images using Google's Gemini AI image generation models. Users can upload multiple images, select an enhancement module, choose between free/fast or paid/pro AI models, and process them all at once.
+LightWork V4 abandons generic SaaS aesthetics for a tool-first design language inspired by professional creative software (Linear, Arc, Lightroom).
 
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Frontend (React + Vite)                   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐ │
-│  │DropZone  │  │Module    │  │Model     │  │CommandCenter     │ │
-│  │          │  │Selector  │  │Selector  │  │(Start/Cancel)    │ │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘ │
-│                              │                                   │
-│                    ┌─────────▼─────────┐                        │
-│                    │   Dashboard.tsx   │                        │
-│                    │  (Main Controller)│                        │
-│                    └─────────┬─────────┘                        │
-│                              │                                   │
-│                    ┌─────────▼─────────┐                        │
-│                    │   src/lib/api.ts  │                        │
-│                    │   (API Client)    │                        │
-│                    └─────────┬─────────┘                        │
-└──────────────────────────────┼──────────────────────────────────┘
-                               │ HTTP
-┌──────────────────────────────▼──────────────────────────────────┐
-│                Cloudflare Pages Functions (Backend)              │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌───────────┐  │
-│  │/api/jobs   │  │/api/images │  │/api/process│  │/api/health│  │
-│  └──────┬─────┘  └──────┬─────┘  └──────┬─────┘  └───────────┘  │
-│         │               │               │                        │
-│         └───────────────┴───────┬───────┘                        │
-│                                 │                                │
-│                    ┌────────────▼────────────┐                   │
-│                    │   lib/processor.ts      │                   │
-│                    │   (Processing Engine)   │                   │
-│                    └────────────┬────────────┘                   │
-│                                 │                                │
-│                    ┌────────────▼────────────┐                   │
-│                    │   lib/gemini.ts         │                   │
-│                    │   (Gemini API Client)   │                   │
-│                    └────────────┬────────────┘                   │
-└─────────────────────────────────┼───────────────────────────────┘
-                                  │
-              ┌───────────────────┼───────────────────┐
-              ▼                   ▼                   ▼
-        ┌──────────┐       ┌──────────┐       ┌──────────┐
-        │   D1     │       │   R2     │       │ Gemini   │
-        │ Database │       │ Storage  │       │   API    │
-        └──────────┘       └──────────┘       └──────────┘
-```
+### Core Pillars
+1.  **Fixed Workspace:** No global scrolling. The app behaves like a desktop application with a fixed sidebar and scrollable internal canvas.
+2.  **Luminous Stone:** A palette built on `#F3F4F6` (Stone) and `#FFFFFF` (Paper) with `#FF4F00` (International Orange) for critical actions.
+3.  **Object Permanence:** Elements don't just appear; they slide, scale, and spring into place using physics-based transitions.
+4.  **Information Density:** High-contrast typography (**Manrope** Display + **Inter** UI) allows for dense information packing without visual clutter.
 
 ---
 
-## Data Flow
+## 2. Frontend Architecture
 
-### 1. Job Creation & Image Upload
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Dashboard
-    participant API
-    participant D1
-    participant R2
-
-    User->>Dashboard: Select module & model
-    User->>Dashboard: Drop images
-    User->>Dashboard: Click "Start Processing"
-    
-    Dashboard->>API: POST /api/jobs
-    API->>D1: INSERT job (module, model, prompt)
-    API-->>Dashboard: job.id
-    
-    Dashboard->>API: POST /api/images/upload
-    API->>R2: Store original images
-    API->>D1: INSERT image records
-    API-->>Dashboard: uploaded count
-    
-    Dashboard->>API: PATCH /api/jobs/:id (start)
-    API->>D1: UPDATE status = 'PROCESSING'
+### Layout Structure
+```
+┌────────────────────┬───────────────────────────────────────────────┐
+│  SIDEBAR (Fixed)   │  MAIN STAGE (Flex / Scrollable)               │
+│                    │                                               │
+│  ┌──────────────┐  │  ┌─────────────────────────────────────────┐  │
+│  │ Logo & Brand │  │  │  Top Bar (Context / Breadcrumbs)        │  │
+│  └──────────────┘  │  └─────────────────────────────────────────┘  │
+│                    │                                               │
+│  ┌──────────────┐  │  ┌─────────────────────────────────────────┐  │
+│  │ Module List  │  │  │                                         │  │
+│  │ (Navigation) │  │  │  DropZone / Staging Grid                │  │
+│  │              │  │  │  (The Canvas)                           │  │
+│  └──────────────┘  │  │                                         │  │
+│                    │  └─────────────────────────────────────────┘  │
+│  ┌──────────────┐  │                                               │
+│  │ Status / Ver │  │        [ Floating Command Dock ]              │
+│  └──────────────┘  │                                               │
+└────────────────────┴───────────────────────────────────────────────┘
 ```
 
-### 2. On-Demand Processing
-
-```mermaid
-sequenceDiagram
-    participant Dashboard
-    participant API
-    participant Processor
-    participant Gemini
-    participant R2
-    participant D1
-
-    Dashboard->>API: POST /api/process
-    API->>Processor: processImages()
-    
-    Processor->>D1: SELECT pending images (LIMIT 5)
-    
-    loop For each image
-        Processor->>D1: UPDATE status = 'PROCESSING'
-        Processor->>R2: GET original image
-        Processor->>Gemini: generateContent(image + prompt)
-        Gemini-->>Processor: processed image
-        Processor->>R2: PUT processed image
-        Processor->>D1: UPDATE status = 'COMPLETED'
-    end
-    
-    Processor->>D1: Check if job complete
-    API-->>Dashboard: { processed, completed, failed }
-```
-
-### 3. Polling Loop
-
-```mermaid
-sequenceDiagram
-    participant Dashboard
-    participant useJobPolling
-    participant API
-
-    loop Every 5 seconds while PROCESSING
-        useJobPolling->>API: GET /api/jobs/:id
-        API-->>useJobPolling: job status + images
-        
-        alt Job still PROCESSING
-            useJobPolling->>API: POST /api/process
-            Note right of API: Trigger more processing
-        else Job COMPLETED/FAILED
-            useJobPolling->>Dashboard: onComplete(job)
-            Note right of Dashboard: Stop polling
-        end
-    end
-```
+### Key Components
+| Component | Responsibility |
+|-----------|----------------|
+| `Dashboard.tsx` | App Shell. Manages split-screen layout, global state, and session recovery. |
+| `DropZone.tsx` | "Resting state" of the canvas. Ingests files with drag-and-drop physics. |
+| `StagingGrid.tsx` | Active state of the canvas. Displays images, status, and results. |
+| `CommandCenter.tsx` | Floating Dock. Houses primary actions: Launch, Cancel, Save All. |
+| `ModuleSelector.tsx` | Sidebar navigation for selecting AI workflows. |
+| `PromptEditor.tsx` | Modal/Sheet for editing module system prompts and per-image instructions. |
 
 ---
 
-## Key Components
+## 3. Backend Architecture (Cloudflare Pages Functions)
 
-### Frontend
+The backend is engineered to survive the harsh constraints of the Cloudflare Workers environment (128MB RAM, 100ms CPU / 100s Wall Time).
 
-| Component | Path | Purpose |
-|-----------|------|---------|
-| `Dashboard` | `src/pages/Dashboard.tsx` | Main controller, orchestrates the entire flow |
-| `DropZone` | `src/components/DropZone.tsx` | Drag-and-drop image upload |
-| `ModuleSelector` | `src/components/ModuleSelector.tsx` | Choose enhancement type |
-| `ModelSelector` | `src/components/ModelSelector.tsx` | Choose Fast (free) or Pro (paid) |
-| `StagingGrid` | `src/components/StagingGrid.tsx` | Preview uploaded images |
-| `CommandCenter` | `src/components/CommandCenter.tsx` | Start/Cancel/Download controls |
-| `useJobPolling` | `src/hooks/useJobPolling.ts` | Polls job status + triggers processing |
+### The "2-Prompt" Rule
+To ensure professional precision and avoid "prompt drift," LightWork enforces a strict 2-prompt composition:
+1.  **Module Prompt:** The base instruction set for the workflow (e.g., "Food Enhancer"). This is editable by the user to tune the overall behavior.
+2.  **Image Prompt:** Optional, per-image instructions that are **appended** to the module prompt for specific refinements.
 
-### Backend (Cloudflare Pages Functions)
+*Note: The legacy "Global Job Prompt" has been removed to simplify the mental model and ensure predictable results.*
 
-| Endpoint | Path | Purpose |
-|----------|------|---------|
-| `GET /api/modules` | `functions/api/modules/index.ts` | List available modules |
-| `POST /api/jobs` | `functions/api/jobs/index.ts` | Create new job |
-| `GET /api/jobs/:id` | `functions/api/jobs/[id].ts` | Get job status + images |
-| `PATCH /api/jobs/:id` | `functions/api/jobs/[id].ts` | Start/Cancel job |
-| `POST /api/images/upload` | `functions/api/images/upload.ts` | Upload images to R2 (validates MIME + 10MB limit) |
-| `POST /api/process` | `functions/api/process.ts` | Trigger image processing |
+### The "Indestructible" Pipeline
 
-### Libraries
+1.  **Concurrency Control:**
+    *   **Old:** Sequential loop (Timeout Risk 🚨).
+    *   **New:** `Promise.allSettled` with `MAX_CONCURRENCY = 2`.
+    *   **Why?** Ensures total request time is driven by the *slowest* image (~8s), not the sum of all images (~40s).
 
-| Library | Path | Purpose |
-|---------|------|---------|
-| `GeminiService` | `functions/lib/gemini.ts` | Gemini API client for image generation |
-| `processor` | `functions/lib/processor.ts` | Core processing logic |
+2.  **Memory Optimization:**
+    *   **Problem:** `fetch` + `base64` + `JSON` for 10MB images explodes memory usage > 128MB.
+    *   **Solution:** Custom Linear-Time Base64 Encoder ($O(N)$) in `gemini.ts` avoids string concatenation garbage collection spikes.
 
----
+3.  **Resiliency ("Zombie Cleanup"):**
+    *   Serverless workers can crash silently (OOM, eviction).
+    *   **Strategy:** Every `processImages` call checks for items stuck in `PROCESSING` state for > 5 minutes and resets them to `PENDING`.
 
-## Database Schema
-
-### Jobs Table
+### Data Model (D1 SQLite)
 
 ```sql
+-- Jobs: The Container (Projects)
 CREATE TABLE jobs (
   id TEXT PRIMARY KEY,
   module_id TEXT NOT NULL,
-  global_prompt TEXT,
-  model TEXT DEFAULT 'nano_banana',  -- 'nano_banana' or 'nano_banana_pro'
-  status TEXT DEFAULT 'PENDING',     -- PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
-  total_images INTEGER DEFAULT 0,
-  completed_images INTEGER DEFAULT 0,
-  failed_images INTEGER DEFAULT 0,
-  created_at INTEGER,
-  started_at INTEGER,
-  completed_at INTEGER
+  model TEXT DEFAULT 'nano_banana', -- 'nano_banana' or 'nano_banana_pro'
+  status TEXT,                      -- PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+  ...timestamps
 );
-```
 
-### Images Table
-
-```sql
+-- Images: The Units of Work
 CREATE TABLE images (
   id TEXT PRIMARY KEY,
-  job_id TEXT NOT NULL,
-  original_key TEXT NOT NULL,        -- R2 key for original
-  processed_key TEXT,                -- R2 key for processed
-  status TEXT DEFAULT 'PENDING',     -- PENDING, PROCESSING, COMPLETED, FAILED, RETRY_LATER
-  specific_prompt TEXT,
-  error_message TEXT,
-  retry_count INTEGER DEFAULT 0,
-  mime_type TEXT
+  job_id TEXT,
+  original_key TEXT,    -- R2 Path
+  processed_key TEXT,   -- R2 Path
+  status TEXT,          -- PENDING, PROCESSING, COMPLETED, FAILED, RETRY_LATER
+  specific_prompt TEXT, -- Per-image instructions
+  retry_count INTEGER,
+  next_retry_at INTEGER -- Exponential Backoff
 );
 ```
 
 ---
 
-## AI Models
+## 4. Operational Workflows
 
-| Model | ID | Use Case | Output | Cost |
-|-------|-----|----------|--------|------|
-| **Nano Banana** | `gemini-2.5-flash-image` | High-volume batch processing | 1024px | Free |
-| **Nano Banana Pro** | `gemini-3-pro-image-preview` | Professional quality | Up to 4K | Paid |
+### Immediate Ingestion
+Unlike traditional batch tools that wait for a "Submit" button, LightWork begins work immediately:
+1.  **Upload:** Dropping files creates a `PENDING` job and uploads originals to R2 instantly.
+2.  **Staging:** Images appear in the grid with local previews while remote records are established.
+3.  **Refinement:** Users can edit the module prompt or add per-image instructions *before* launching the batch.
 
-### Model Selection Flow
+### Batch Processing Loop
+The system uses a "Client-Side Pulse" instead of a true background worker (due to Pages limitations).
 
-1. User selects model via `ModelSelector` toggle in UI
-2. Model choice stored in `jobs.model` column
-3. `processor.ts` reads job model and creates `GeminiService` with correct model ID
-4. API call uses `responseModalities: ['Image']` for image-only output
+1.  **Frontend:** `useJobPolling` hook fires every 3s.
+2.  **Check:** "Is job processing?" -> Yes.
+3.  **Trigger:** `POST /api/process`.
+4.  **Backend:**
+    *   DB: `UPDATE images SET status='PROCESSING' LIMIT 2 ... RETURNING *` (Atomic Claim).
+    *   R2: Fetch 2 images.
+    *   Gemini: Generate 2 results parallel using the **2-Prompt Rule**.
+    *   R2: Save results.
+    *   DB: Update status to `COMPLETED`.
+    *   Return: `{ processed: 2 }`.
+5.  **Repeat:** Client sees success, fires next pulse immediately.
 
----
-
-## Processing Details
-
-### Rate Limiting Strategy
-
-- **Batch Size**: 5 images per `/api/process` call
-- **Polling Interval**: 5 seconds
-- **Max Retries**: 3 per image
-- **Status**: `RETRY_LATER` for rate-limited requests
-
-### Error Handling
-
-1. **Rate Limited (429/503)**: Mark as `RETRY_LATER`, increment retry count
-2. **Content Blocked**: Mark as `FAILED` with error message
-3. **Max Retries Exceeded**: Mark as `FAILED`, increment job's `failed_images`
-
----
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `GEMINI_API_KEY` | Google Gemini API key |
-| `DB` | D1 Database binding (automatic) |
-| `STORAGE` | R2 Bucket binding (automatic) |
-
-### Local Development
-
-Create `.dev.vars`:
-```
-GEMINI_API_KEY=your_api_key_here
-```
-
-### Production
-
-Set in Cloudflare Pages > Settings > Environment Variables.
-
-> **Note:** The app was renamed from "BananaBatch" to "LightWork". The D1 database (`bananabatch-db`) and R2 bucket (`bananabatch-storage`) retain the original names to preserve existing data and avoid migration.
-
----
-
-## Running the App
-
-### Local Development
-
-```bash
-# Install dependencies
-npm install
-
-# Apply database schema locally
-npm run db:migrate:local
-
-# Start dev server with Pages Functions
-npm run pages:dev
-```
-
-### Deployment
-
-```bash
-# Build frontend
-npm run build
-
-# Apply schema to remote D1
-npm run db:migrate
-
-# Deploy to Cloudflare Pages
-npm run pages:deploy
-```
-
----
-
-## File Structure
-
-```
-LightWork/
-├── src/                          # Frontend (React)
-│   ├── components/               # UI components
-│   │   ├── DropZone.tsx
-│   │   ├── ModuleSelector.tsx
-│   │   ├── ModelSelector.tsx     # ⚡ Fast / 👑 Pro toggle
-│   │   ├── StagingGrid.tsx
-│   │   └── CommandCenter.tsx
-│   ├── hooks/
-│   │   ├── useJobPolling.ts      # Polls + triggers processing
-│   │   └── useSessionRecovery.ts
-│   ├── lib/
-│   │   └── api.ts                # Frontend API client
-│   └── pages/
-│       └── Dashboard.tsx         # Main page
-│
-├── functions/                    # Backend (Cloudflare Pages Functions)
-│   ├── api/
-│   │   ├── jobs/
-│   │   │   ├── index.ts          # GET/POST /api/jobs
-│   │   │   └── [id].ts           # GET/PATCH/DELETE /api/jobs/:id
-│   │   ├── images/
-│   │   │   └── upload.ts         # POST /api/images/upload
-│   │   ├── modules/
-│   │   │   └── index.ts          # GET /api/modules
-│   │   ├── process.ts            # POST /api/process
-│   │   └── health.ts             # GET /api/health
-│   ├── lib/
-│   │   ├── gemini.ts             # Gemini API service
-│   │   └── processor.ts          # Image processing logic
-│   └── types.ts                  # Shared TypeScript types
-│
-├── schema.sql                    # D1 database schema
-├── migrations/                   # Database migrations
-│   └── 001_add_model_column.sql
-├── wrangler.toml                 # Cloudflare configuration
-└── package.json
-```
-
----
-
-## Summary
-
-LightWork uses an **on-demand processing** model where:
-
-1. **Frontend** creates jobs, uploads images, and polls for status
-2. **Backend** processes images in batches of 5 when `/api/process` is called
-3. **Polling hook** triggers processing only when pending images exist (prevents excessive API calls)
-4. **Users choose** between free/fast and paid/pro AI models
-5. **All infrastructure** runs on Cloudflare (Pages, D1, R2)
-
-> Note: A cron worker file exists for compatibility with Worker deployments, but Cloudflare Pages does not run cron triggers. In Pages the system relies solely on the on-demand `/api/process` calls (including those initiated by the polling hook).
+This architecture allows "infinite" batch sizes on a serverless platform by breaking the work into atomic, stateless chunks.

@@ -1,5 +1,25 @@
 # LightWork Visual & Technical Audit
 
+## 🛠️ Resolved Issues (Post-Audit)
+
+### 1. Fixed Footer Collision
+- **Status:** ✅ RESOLVED
+- **Fix:** Implemented a fixed-workspace layout where the sidebar and canvas are independent scroll areas. The command bar is now a floating dock that never overlaps content.
+
+### 2. Color Palette Drift
+- **Status:** ✅ RESOLVED
+- **Fix:** Standardized on the "Luminous Stone" palette using Tailwind CSS 4 variables. All components now pull from a central theme definition.
+
+### 3. Prompt Hierarchy Confusion
+- **Status:** ✅ RESOLVED
+- **Fix:** Enforced the "2-Prompt Rule." Removed the redundant global job prompt. The system now only uses the Module System Prompt and the Image-Specific Prompt.
+
+### 4. Session Persistence
+- **Status:** ✅ RESOLVED
+- **Fix:** Added a "Projects" sidebar that fetches previous jobs from D1, allowing users to switch between historical batches and recover their work.
+
+---
+
 > **Auditor:** Senior Front-End Engineer & Product Designer  
 > **Date:** December 20, 2024  
 > **URL:** `http://127.0.0.1:8788`

@@ -75,14 +75,12 @@ export class GeminiService {
      * @param imageBuffer - The input image as ArrayBuffer
      * @param mimeType - MIME type of the input image
      * @param module - The processing module with system prompt
-     * @param globalPrompt - Optional global instructions
      * @param specificPrompt - Optional image-specific instructions
      */
     async processImage(
         imageBuffer: ArrayBuffer,
         mimeType: string,
         module: Module,
-        globalPrompt?: string | null,
         specificPrompt?: string | null
     ): Promise<ProcessImageResult> {
         // Validate input MIME type
@@ -95,17 +93,12 @@ export class GeminiService {
         }
 
         // Build the complete prompt
-        const promptParts = [module.system_prompt];
-
-        if (globalPrompt) {
-            promptParts.push(`\n\nAdditional instructions: ${globalPrompt}`);
-        }
-
-        if (specificPrompt) {
-            promptParts.push(`\n\nSpecific instructions for this image: ${specificPrompt}`);
-        }
-
-        const fullPrompt = promptParts.join('');
+        // 2-prompt rule:
+        // - Module system_prompt is the global base
+        // - Image specific_prompt is appended (optional)
+        const fullPrompt = module.system_prompt + (specificPrompt
+            ? `\n\nAdditional instructions for this image: ${specificPrompt}`
+            : '');
 
         // Convert image to base64
         const base64Image = this.arrayBufferToBase64(imageBuffer);

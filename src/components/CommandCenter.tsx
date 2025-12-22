@@ -44,19 +44,19 @@ export function CommandCenter({
             <div className={cn(
                 'relative flex flex-col gap-0 overflow-hidden',
                 // Shape & Material
-                'rounded-[32px] bg-[var(--color-foreground)] border-2 border-[var(--color-line)]',
+                'rounded-[32px] bg-foreground text-white border border-white/10',
                 'shadow-[0px_12px_32px_-8px_rgba(0,0,0,0.4)]',
                 'transition-all duration-300 ease-out',
-                isProcessing && 'ring-4 ring-[var(--color-primary)]/20'
+                isProcessing && 'ring-4 ring-accent/20'
             )}>
 
                 {/* Top Status Bar (Technical) */}
-                <div className="flex items-center justify-between px-6 py-3 bg-black/20 border-b-2 border-[var(--color-line)]/10">
+                <div className="flex items-center justify-between px-6 py-3 bg-black/20 border-b border-white/10">
                     <div className="flex items-center gap-2">
                         <div className={cn(
                             "w-2 h-2 rounded-full",
-                            isProcessing ? "bg-[var(--color-primary)] animate-pulse" :
-                                isComplete ? "bg-[var(--color-accent)]" : "bg-white/20"
+                            isProcessing ? "bg-accent animate-pulse" :
+                                isComplete ? "bg-accent" : "bg-white/20"
                         )} />
                         <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-white/40">
                             {status === 'PENDING' ? 'SYSTEM READY' : status}
@@ -70,9 +70,9 @@ export function CommandCenter({
 
                 {/* Progress Visualizer */}
                 {isProcessing && (
-                    <div className="relative h-1 w-full bg-[#222]">
+                    <div className="relative h-1 w-full bg-white/10">
                         <div
-                            className="absolute top-0 left-0 h-full bg-[var(--color-primary)] shadow-[0_0_10px_var(--color-primary)] transition-all duration-300"
+                            className="absolute top-0 left-0 h-full bg-accent shadow-[0_0_12px_var(--color-accent)] transition-all duration-300"
                             style={{ width: `${progress}%` }}
                         />
                     </div>
@@ -84,7 +84,7 @@ export function CommandCenter({
                     {(isComplete || isFailed) ? (
                         <div className={cn(
                             "flex-1 flex items-center gap-3 px-4 h-14 rounded-2xl",
-                            isComplete ? "bg-[var(--color-mint)] text-[#1A1A1A]" : "bg-red-500 text-white"
+                            isComplete ? "bg-accent text-white" : "bg-red-500 text-white"
                         )}>
                             {isComplete ? <Rocket className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
                             <div className="flex flex-col leading-none">
@@ -113,7 +113,7 @@ export function CommandCenter({
                             <Button
                                 onClick={onStart}
                                 disabled={disabled || totalImages === 0}
-                                className="h-14 px-8 bg-[var(--color-primary)] text-[var(--color-primary-foreground)] border-none hover:bg-white hover:text-[var(--color-foreground)] hover:scale-105 shadow-[0_0_20px_rgba(255,122,47,0.25)] hover:shadow-[0_0_30px_rgba(255,122,47,0.35)] transition-all rounded-2xl font-display text-lg tracking-normal"
+                                className="h-14 px-8 bg-accent text-white border border-white/10 hover:opacity-95 hover:scale-105 transition-all rounded-2xl font-display text-lg tracking-normal"
                             >
                                 <Rocket className="w-5 h-5 mr-2" />
                                 LAUNCH
@@ -124,7 +124,7 @@ export function CommandCenter({
                             <Button
                                 onClick={onCancel}
                                 variant="destructive"
-                                className="h-14 w-14 p-0 rounded-2xl bg-[#333] border border-[#444] text-white hover:bg-red-500 hover:border-red-500"
+                                className="h-14 w-14 p-0 rounded-2xl bg-white/10 border border-white/10 text-white hover:bg-red-500 hover:border-red-500"
                             >
                                 <Square className="w-5 h-5 fill-current" />
                             </Button>
@@ -133,7 +133,7 @@ export function CommandCenter({
                         {(isComplete || isFailed) && completedImages > 0 && (
                             <Button
                                 onClick={onDownload}
-                                className="h-14 px-8 bg-white text-[var(--color-foreground)] border-none hover:bg-[var(--color-primary)] hover:text-[var(--color-primary-foreground)] hover:scale-105 rounded-2xl font-display text-lg"
+                                className="h-14 px-8 bg-white text-foreground border border-white/10 hover:bg-accent hover:text-white hover:scale-105 rounded-2xl font-display text-lg"
                             >
                                 <Download className="w-5 h-5 mr-2" />
                                 SAVE ALL
@@ -143,8 +143,8 @@ export function CommandCenter({
                 </div>
 
                 {/* Decorative Tech Lines */}
-                <div className="absolute top-0 right-8 w-px h-full bg-[#333]" />
-                <div className="absolute bottom-0 left-8 w-px h-8 bg-[#333]" />
+                <div className="absolute top-0 right-8 w-px h-full bg-white/10" />
+                <div className="absolute bottom-0 left-8 w-px h-8 bg-white/10" />
             </div>
         </div>
     );

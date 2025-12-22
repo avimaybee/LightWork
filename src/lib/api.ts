@@ -112,6 +112,13 @@ export async function getModule(id: string): Promise<Module> {
     return request(`/modules/${id}`);
 }
 
+export async function updateModulePrompt(id: string, systemPrompt: string): Promise<Module> {
+    return request(`/modules/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ system_prompt: systemPrompt }),
+    });
+}
+
 // Jobs
 export async function getJobs(): Promise<JobWithModule[]> {
     return request('/jobs');
@@ -160,6 +167,13 @@ export async function updateJobPrompt(id: string, globalPrompt: string): Promise
     return request(`/jobs/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ global_prompt: globalPrompt }),
+    });
+}
+
+export async function updateJobModel(id: string, model: GeminiModel): Promise<Job> {
+    return request(`/jobs/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ model }),
     });
 }
 

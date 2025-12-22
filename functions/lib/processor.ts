@@ -40,9 +40,21 @@ export async function processImages(env: Env): Promise<ProcessResult> {
         return result;
     }
 
+    const now = Math.floor(Date.now() / 1000);
+
+    // CRITICAL: Reset "stuck" processing images (Zombies)
+    // If an image has been PROCESSING for > 5 minutes, the worker likely crashed.
+    // Reset it to PENDING so it can be picked up again.
+    const STUCK_THRESHOLD_SECONDS = 300; // 5 minutes
+    await env.DB.prepare(
+        `UPDATE images 
+         SET status = 'PENDING', updated_at = ? 
+         WHERE status = 'PROCESSING' 
+         AND updated_at < ?`
+    ).bind(now, now - STUCK_THRESHOLD_SECONDS).run();
+
     // Get pending images from active jobs (include model selection)
     // We use a subquery to find candidates and then update them to 'PROCESSING' in one go to "claim" them
-    const now = Math.floor(Date.now() / 1000);
     
     const { results: claimedImages } = await env.DB.prepare(
         `UPDATE images 
@@ -67,18 +79,18 @@ export async function processImages(env: Env): Promise<ProcessResult> {
         return result;
     }
 
-    // We need the job info (module_id, global_prompt, model) for these images
+    // We need the job info (module_id, model) for these images
     // Since RETURNING * only gives image columns, we fetch the job info separately or join
     // Actually, it's better to fetch the full joined data for the claimed IDs
     const imageIds = claimedImages.map(img => img.id);
     const placeholders = imageIds.map(() => '?').join(',');
     
     const { results: pendingImages } = await env.DB.prepare(
-        `SELECT i.*, j.module_id, j.global_prompt, j.model
+        `SELECT i.*, j.module_id, j.model
          FROM images i
          JOIN jobs j ON i.job_id = j.id
          WHERE i.id IN (${placeholders})`
-    ).bind(...imageIds).all<ImageRecord & { module_id: string; global_prompt: string | null; model: string | null }>();
+    ).bind(...imageIds).all<ImageRecord & { module_id: string; model: string | null }>();
 
     if (!pendingImages || pendingImages.length === 0) {
         return result;
@@ -120,7 +132,7 @@ export async function processImages(env: Env): Promise<ProcessResult> {
 
 async function processImage(
     env: Env,
-    image: ImageRecord & { module_id: string; global_prompt: string | null; model: string | null }
+    image: ImageRecord & { module_id: string; model: string | null }
 ): Promise<{ success: boolean; error?: string }> {
     const now = Math.floor(Date.now() / 1000);
 
@@ -154,7 +166,6 @@ async function processImage(
             imageBuffer,
             image.mime_type || 'image/jpeg',
             module,
-            image.global_prompt,
             image.specific_prompt
         );
 
