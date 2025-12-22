@@ -59,15 +59,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
         const currentCount = countResult?.count || 0;
 
-        // Get all files from form data
-        const files: File[] = [];
-        for (const [key, value] of formData.entries()) {
-            if (key.startsWith('file') && value instanceof File) {
-                files.push(value);
+        // Get all files and thumbnails from form data
+        const items: { file: File; thumb: File | null }[] = [];
+        for (let i = 0; i < MAX_IMAGES_PER_BATCH; i++) {
+            const file = formData.get(`file${i}`);
+            const thumb = formData.get(`thumb${i}`);
+            
+            if (file instanceof File) {
+                items.push({ 
+                    file, 
+                    thumb: thumb instanceof File ? thumb : null 
+                });
+            } else {
+                // Assuming sequential naming file0, file1...
+                if (i > 0 && !formData.has(`file${i}`)) break;
             }
         }
 
-        if (files.length === 0) {
+        if (items.length === 0) {
             return new Response(JSON.stringify({
                 success: false,
                 error: 'No files provided',
@@ -78,7 +87,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }
 
         // Validate files (type + size)
-        const invalidFiles = files.filter((file) => {
+        const invalidFiles = items.filter(({ file }) => {
             if (file.size > MAX_FILE_SIZE_BYTES) return true;
             if (!ALLOWED_MIME_TYPES.includes(file.type.toLowerCase())) return true;
             return false;
@@ -87,7 +96,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         if (invalidFiles.length > 0) {
             return new Response(JSON.stringify({
                 success: false,
-                error: `Invalid files: ${invalidFiles.map(f => f.name).join(', ')}. Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}. Max size: 10MB`,
+                error: `Invalid files: ${invalidFiles.map(i => i.file.name).join(', ')}. Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}. Max size: 10MB`,
             }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json' },
@@ -95,10 +104,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }
 
         // Check max limit
-        if (currentCount + files.length > MAX_IMAGES_PER_BATCH) {
+        if (currentCount + items.length > MAX_IMAGES_PER_BATCH) {
             return new Response(JSON.stringify({
                 success: false,
-                error: `Maximum ${MAX_IMAGES_PER_BATCH} images per batch. Currently have ${currentCount}, trying to add ${files.length}.`,
+                error: `Maximum ${MAX_IMAGES_PER_BATCH} images per batch. Currently have ${currentCount}, trying to add ${items.length}.`,
             }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json' },
@@ -108,16 +117,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         const uploadedImages: ImageRecord[] = [];
         const now = Math.floor(Date.now() / 1000);
 
-        for (const file of files) {
+        for (const { file, thumb } of items) {
             const imageId = generateId();
             const originalKey = `originals/${jobId}/${imageId}-${file.name}`;
+            const thumbnailKey = thumb ? `thumbnails/${jobId}/${imageId}-thumb.jpg` : null;
 
-            // Upload to R2
+            // Upload Original to R2
             const arrayBuffer = await file.arrayBuffer();
             await env.STORAGE.put(originalKey, arrayBuffer, {
-                httpMetadata: {
-                    contentType: file.type,
-                },
+                httpMetadata: { contentType: file.type },
                 customMetadata: {
                     originalFilename: file.name,
                     jobId: jobId,
@@ -125,11 +133,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                 },
             });
 
+            // Upload Thumbnail to R2 if provided
+            if (thumb && thumbnailKey) {
+                const thumbBuffer = await thumb.arrayBuffer();
+                await env.STORAGE.put(thumbnailKey, thumbBuffer, {
+                    httpMetadata: { contentType: 'image/jpeg' },
+                    customMetadata: { jobId, imageId, type: 'thumbnail' }
+                });
+            }
+
             // Create database record
             await env.DB.prepare(
-                `INSERT INTO images (id, job_id, original_key, original_filename, status, file_size, mime_type, created_at)
-         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?)`
-            ).bind(imageId, jobId, originalKey, file.name, file.size, file.type, now).run();
+                `INSERT INTO images (id, job_id, original_key, thumbnail_key, original_filename, status, file_size, mime_type, created_at)
+         VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)`
+            ).bind(imageId, jobId, originalKey, thumbnailKey, file.name, file.size, file.type, now).run();
 
             uploadedImages.push({
                 id: imageId,
@@ -137,7 +154,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                 original_key: originalKey,
                 original_filename: file.name,
                 processed_key: null,
-                thumbnail_key: null,
+                thumbnail_key: thumbnailKey,
                 status: 'PENDING',
                 specific_prompt: null,
                 error_message: null,
@@ -152,7 +169,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         // Update job total_images count
         await env.DB.prepare(
             'UPDATE jobs SET total_images = total_images + ?, updated_at = ? WHERE id = ?'
-        ).bind(files.length, now, jobId).run();
+        ).bind(items.length, now, jobId).run();
 
         const response: ApiResponse<{ uploaded: number; images: ImageRecord[] }> = {
             success: true,

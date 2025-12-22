@@ -26,7 +26,7 @@ export interface ProcessResult {
 /**
  * Process pending images from active jobs
  */
-export async function processImages(env: Env): Promise<ProcessResult> {
+export async function processImages(env: Env, ctx?: ExecutionContext): Promise<ProcessResult> {
     const result: ProcessResult = {
         processed: 0,
         completed: 0,
@@ -97,6 +97,11 @@ export async function processImages(env: Env): Promise<ProcessResult> {
     }
 
     console.log(`🍌 Processing ${pendingImages.length} images`);
+
+    // Run cleanup occasionally (10% chance per run to avoid overhead)
+    if (Math.random() < 0.1) {
+        ctx?.waitUntil?.(cleanupOldJobs(env));
+    }
 
     // For Pro model jobs, keep concurrency at 1 to reduce memory spikes (larger outputs / thinking).
     const hasProModel = pendingImages.some(img => img.model === 'nano_banana_pro');
@@ -170,22 +175,33 @@ async function processImage(
         );
 
         if (!result.success) {
-            // Handle rate limiting with exponential backoff
-            if (result.error === 'RATE_LIMITED') {
-                const backoffSeconds = Math.pow(2, image.retry_count + 1) * 30; // 60s, 120s, 240s...
+            // Handle rate limiting and overloaded models with exponential backoff
+            if (result.error === 'RATE_LIMITED' || result.error === 'MODEL_OVERLOADED') {
+                const isOverloaded = result.error === 'MODEL_OVERLOADED';
+                const backoffSeconds = Math.pow(2, image.retry_count + 1) * (isOverloaded ? 15 : 30); 
                 const nextRetry = now + backoffSeconds;
                 
-                console.log(`🍌 Rate limited on image ${image.id}, retrying in ${backoffSeconds}s`);
+                console.log(`🍌 ${result.error} on image ${image.id}, retrying in ${backoffSeconds}s`);
                 
                 await env.DB.prepare(
                     `UPDATE images SET 
                      status = 'RETRY_LATER', 
+                     error_message = ?,
                      retry_count = retry_count + 1,
                      next_retry_at = ?
                      WHERE id = ?`
-                ).bind(nextRetry, image.id).run();
+                ).bind(
+                    isOverloaded ? 'Gemini is busy. Retrying...' : 'Rate limit exceeded. Retrying...',
+                    nextRetry, 
+                    image.id
+                ).run();
                 
-                return { success: false, error: 'Rate limited' };
+                return { success: false, error: result.error };
+            }
+
+            // Map Safety Blocks
+            if (result.error?.startsWith('SAFETY_BLOCKED')) {
+                throw new Error('Blocked by AI Safety filters. Please try a different prompt.');
             }
 
             throw new Error(result.error || 'Processing failed');
@@ -292,5 +308,60 @@ async function checkAndCompleteJobs(env: Env): Promise<void> {
                 console.log(`🍌 Job ${job.id} marked as ${finalStatus}`);
             }
         }
+    }
+}
+
+/**
+ * Delete jobs and images older than 24 hours
+ */
+export async function cleanupOldJobs(env: Env): Promise<void> {
+    const now = Math.floor(Date.now() / 1000);
+    const CLEANUP_THRESHOLD = 24 * 60 * 60; // 24 hours
+    const cutoff = now - CLEANUP_THRESHOLD;
+
+    console.log(`✨ Starting cleanup for jobs older than ${new Date(cutoff * 1000).toISOString()}`);
+
+    try {
+        // Find old jobs
+        const { results: oldJobs } = await env.DB.prepare(
+            'SELECT id FROM jobs WHERE created_at < ?'
+        ).bind(cutoff).all<{ id: string }>();
+
+        if (!oldJobs || oldJobs.length === 0) {
+            console.log('✨ No old jobs to clean up');
+            return;
+        }
+
+        console.log(`✨ Cleaning up ${oldJobs.length} old jobs`);
+
+        for (const job of oldJobs) {
+            // Find all images for this job
+            const { results: images } = await env.DB.prepare(
+                'SELECT original_key, processed_key, thumbnail_key FROM images WHERE job_id = ?'
+            ).bind(job.id).all<{ original_key: string | null, processed_key: string | null, thumbnail_key: string | null }>();
+
+            // Delete from R2
+            const keysToDelete = images.flatMap(img => [
+                img.original_key,
+                img.processed_key,
+                img.thumbnail_key
+            ]).filter(Boolean) as string[];
+
+            if (keysToDelete.length > 0) {
+                // Delete in batches of 20 to avoid R2 limits/timeouts
+                for (let i = 0; i < keysToDelete.length; i += 20) {
+                    const batch = keysToDelete.slice(i, i + 20);
+                    await Promise.all(batch.map(key => env.STORAGE.delete(key)));
+                }
+            }
+
+            // Delete from D1 (Cascade should handle images if configured, but we'll be explicit)
+            await env.DB.prepare('DELETE FROM images WHERE job_id = ?').bind(job.id).run();
+            await env.DB.prepare('DELETE FROM jobs WHERE id = ?').bind(job.id).run();
+        }
+
+        console.log('✨ Cleanup completed successfully');
+    } catch (error) {
+        console.error('✨ Cleanup failed:', error);
     }
 }

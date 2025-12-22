@@ -120,8 +120,16 @@ export async function updateModulePrompt(id: string, systemPrompt: string): Prom
 }
 
 // Jobs
-export async function getJobs(): Promise<JobWithModule[]> {
-    return request('/jobs');
+export async function getJobs(limit?: number, offset?: number): Promise<JobWithModule[]> {
+    let url = '/jobs';
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.append('limit', limit.toString());
+    if (offset !== undefined) params.append('offset', offset.toString());
+    
+    const queryString = params.toString();
+    if (queryString) url += `?${queryString}`;
+    
+    return request(url);
 }
 
 export async function getJob(id: string): Promise<JobWithImages> {
@@ -139,6 +147,12 @@ export async function startJob(id: string): Promise<Job> {
     return request(`/jobs/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ action: 'start' }),
+    });
+}
+
+export async function cleanupJobs(): Promise<void> {
+    return request('/jobs/cleanup', {
+        method: 'DELETE',
     });
 }
 
@@ -184,12 +198,16 @@ export async function deleteJob(id: string): Promise<void> {
 }
 
 // Images
-export async function uploadImages(jobId: string, files: File[]): Promise<{ uploaded: number; images: ImageRecord[] }> {
+export async function uploadImages(
+    jobId: string, 
+    items: { file: File; thumbnail: Blob }[]
+): Promise<{ uploaded: number; images: ImageRecord[] }> {
     const formData = new FormData();
     formData.append('job_id', jobId);
 
-    files.forEach((file, index) => {
-        formData.append(`file${index}`, file);
+    items.forEach((item, index) => {
+        formData.append(`file${index}`, item.file);
+        formData.append(`thumb${index}`, item.thumbnail, `thumb_${item.file.name}`);
     });
 
     const response = await fetch(`${API_BASE}/images/upload`, {
@@ -213,7 +231,13 @@ export async function updateImagePrompt(id: string, specificPrompt: string): Pro
     });
 }
 
-export function getImageUrl(imageId: string, type: 'original' | 'processed'): string {
+export async function deleteImage(id: string): Promise<void> {
+    return request(`/images/${id}`, {
+        method: 'DELETE',
+    });
+}
+
+export function getImageUrl(imageId: string, type: 'original' | 'processed' | 'thumbnail'): string {
     return `${API_BASE}/images/${imageId}/${type}`;
 }
 

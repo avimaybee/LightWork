@@ -33,14 +33,17 @@ export function ModuleSelector({
     const categories = Object.keys(groupedModules);
 
     return (
-        <div className={cn('space-y-8', className)}>
+        <div className={cn('space-y-12', className)}>
             {categories.map((category) => (
-                <div key={category} className="space-y-2">
-                    <h3 className="px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-sub)] opacity-70">
-                        {categoryLabels[category] || category}
-                    </h3>
+                <div key={category} className="space-y-6">
+                    <div className="flex items-center gap-4 px-2">
+                        <h3 className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-[var(--color-accent)]">
+                            {categoryLabels[category] || category}
+                        </h3>
+                        <div className="h-px flex-1 bg-gradient-to-r from-[var(--color-border)] to-transparent" />
+                    </div>
 
-                    <div className="space-y-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {groupedModules[category].map((module) => {
                             const Icon = getModuleIcon(module.icon);
                             const isSelected = selectedId === module.id;
@@ -51,39 +54,55 @@ export function ModuleSelector({
                                     onClick={() => onSelect(module)}
                                     disabled={disabled}
                                     className={cn(
-                                        'w-full group relative flex items-center p-3 rounded-xl transition-all duration-200',
+                                        'group relative flex flex-col p-6 rounded-[24px] transition-all duration-500 text-left overflow-hidden',
+                                        'border border-[var(--color-border)]',
                                         
                                         // Interaction
                                         disabled
                                             ? 'opacity-50 cursor-not-allowed'
-                                            : 'hover:bg-white hover:shadow-subtle',
+                                            : 'hover:border-[var(--color-accent)]/30 hover:shadow-float hover:-translate-y-1',
 
                                         // Selection State
                                         isSelected
-                                            ? 'bg-white shadow-float ring-1 ring-black/5'
-                                            : 'bg-transparent text-[var(--color-ink-sub)]'
+                                            ? 'bg-white shadow-2xl ring-2 ring-[var(--color-accent)] border-transparent'
+                                            : 'bg-white/50 backdrop-blur-sm'
                                     )}
                                 >
-                                    <div
-                                        className={cn(
-                                            "w-8 h-8 rounded-lg flex items-center justify-center mr-3 transition-colors duration-200",
-                                            isSelected ? "bg-[var(--color-ink)] text-white" : "bg-[var(--color-border)] text-[var(--color-ink-sub)] group-hover:text-[var(--color-ink)]"
+                                    {/* Background Noise Overlay */}
+                                    <div className="absolute inset-0 noise-overlay opacity-[0.03] pointer-events-none" />
+                                    
+                                    <div className="flex items-start justify-between mb-6 relative z-10">
+                                        <div
+                                            className={cn(
+                                                "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500",
+                                                isSelected ? "bg-[var(--color-accent)] text-white rotate-3 scale-110 shadow-lg shadow-[var(--color-accent)]/20" : "bg-[var(--color-canvas)] text-[var(--color-ink-sub)] group-hover:bg-white group-hover:text-[var(--color-ink)] group-hover:rotate-3"
+                                            )}
+                                        >
+                                            <Icon className="w-6 h-6" />
+                                        </div>
+                                        
+                                        {isSelected && (
+                                            <div className="w-6 h-6 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center shadow-lg animate-scale-in">
+                                                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                            </div>
                                         )}
-                                    >
-                                        <Icon className="w-4 h-4" />
                                     </div>
 
-                                    <div className="flex-1 text-left min-w-0">
+                                    <div className="relative z-10">
                                         <h4 className={cn(
-                                            "text-sm font-medium truncate transition-colors",
+                                            "font-display font-extrabold text-lg tracking-tight transition-colors mb-1",
                                             isSelected ? "text-[var(--color-ink)]" : "text-[var(--color-ink-sub)] group-hover:text-[var(--color-ink)]"
                                         )}>
                                             {module.name}
                                         </h4>
+                                        <p className="text-xs text-[var(--color-ink-sub)] font-medium leading-relaxed line-clamp-2 opacity-70">
+                                            {module.description || 'Specialized visual intelligence for high-fidelity asset refinement.'}
+                                        </p>
                                     </div>
 
+                                    {/* Subtle Gradient on Selection */}
                                     {isSelected && (
-                                        <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] shadow-[0_0_8px_var(--color-accent)]" />
+                                        <div className="absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-tl from-[var(--color-accent)]/5 to-transparent rounded-tl-full pointer-events-none" />
                                     )}
                                 </button>
                             );

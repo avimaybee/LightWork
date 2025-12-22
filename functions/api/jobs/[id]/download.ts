@@ -7,9 +7,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const jobId = params.id as string;
 
     try {
+        // Get job with module name
         const job = await env.DB.prepare(
-            'SELECT * FROM jobs WHERE id = ?'
-        ).bind(jobId).first<Job>();
+            `SELECT j.*, m.name as module_name 
+             FROM jobs j 
+             JOIN modules m ON j.module_id = m.id 
+             WHERE j.id = ?`
+        ).bind(jobId).first<Job & { module_name: string }>();
 
         if (!job) {
             return new Response(JSON.stringify({
@@ -39,7 +43,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         // Create ZIP file
         const zip = new JSZip();
 
-        for (const image of images) {
+        // Download images in parallel (bounded by Cloudflare's concurrent subrequest limit)
+        // Cloudflare allows up to 6 concurrent subrequests per request.
+        // We'll process them in batches or just use Promise.all and let the platform handle it.
+        // Actually, Promise.all is fine as Cloudflare will queue them if needed.
+        await Promise.all(images.map(async (image) => {
             if (image.processed_key) {
                 const object = await env.STORAGE.get(image.processed_key);
                 if (object) {
@@ -50,15 +58,20 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
                     zip.file(filename, arrayBuffer);
                 }
             }
-        }
+        }));
 
         const zipBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+
+        // Format filename: LightWork_ModuleName_YYYY-MM-DD.zip
+        const date = new Date().toISOString().split('T')[0];
+        const safeModuleName = job.module_name.replace(/[^a-z0-9]/gi, '_');
+        const zipFilename = `LightWork_${safeModuleName}_${date}.zip`;
 
         return new Response(zipBuffer, {
             status: 200,
             headers: {
                 'Content-Type': 'application/zip',
-                'Content-Disposition': `attachment; filename="lightwork-${jobId.slice(0, 8)}.zip"`,
+                'Content-Disposition': `attachment; filename="${zipFilename}"`,
             },
         });
     } catch (error) {

@@ -9,7 +9,6 @@ import { processImages } from './lib/processor';
 export default {
     async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
         void event;
-        void _ctx;
         console.log('✨ LightWork Cron Worker started at', new Date().toISOString());
 
         if (!env.GEMINI_API_KEY) {
@@ -17,6 +16,6 @@ export default {
             return;
         }
 
-        await processImages(env);
+        await processImages(env, _ctx);
     },
 };

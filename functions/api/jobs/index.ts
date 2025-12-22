@@ -7,7 +7,10 @@ function generateId(): string {
 
 // GET /api/jobs - List all jobs
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-    const { env } = context;
+    const { env, request } = context;
+    const url = new URL(request.url);
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const offset = parseInt(url.searchParams.get('offset') || '0');
 
     try {
         const { results } = await env.DB.prepare(
@@ -15,8 +18,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
        FROM jobs j
        JOIN modules m ON j.module_id = m.id
        ORDER BY j.created_at DESC
-       LIMIT 50`
-        ).all<JobWithModule>();
+       LIMIT ? OFFSET ?`
+        ).bind(limit, offset).all<JobWithModule>();
 
         const response: ApiResponse<JobWithModule[]> = {
             success: true,

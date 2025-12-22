@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 /* 
@@ -9,47 +9,48 @@
 @theme {
   /* Typography */
   --font-display: "Manrope", sans-serif;
-  --font-body: "Inter", sans-serif;
+  --font-body: "Plus Jakarta Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
   
   /* Palette: LUMINOUS STONE */
-  --color-canvas: #F3F4F6;     /* Cool Gray 100 - The Workbench */
+  --color-canvas: #F8F9FA;     /* Ultra-clean canvas */
   --color-surface: #FFFFFF;    /* Pure White - The Sheet */
-  --color-ink: #111827;        /* Gray 900 - Primary Text */
-  --color-ink-sub: #6B7280;    /* Gray 500 - Secondary Text */
+  --color-ink: #0F172A;        /* Slate 900 - Primary Text */
+  --color-ink-sub: #64748B;    /* Slate 500 - Secondary Text */
   
   --color-accent: #FF4F00;     /* International Orange - The Action */
   --color-accent-sub: #FFF1F2; /* Soft Orange Wash */
   
-  --color-border: #E5E7EB;     /* Gray 200 */
-  --color-border-hover: #D1D5DB; /* Gray 300 */
+  --color-border: #E2E8F0;     /* Slate 200 */
+  --color-border-hover: #CBD5E1; /* Slate 300 */
 
   /* Semantic Map */
   --color-background: var(--color-canvas);
   --color-foreground: var(--color-ink);
   --color-primary: var(--color-ink);
   --color-primary-foreground: #FFFFFF;
-  --color-secondary: #F3F4F6;
+  --color-secondary: #F1F5F9;
   --color-secondary-foreground: var(--color-ink);
-  --color-muted: #F9FAFB;
-  --color-muted-foreground: #6B7280;
+  --color-muted: #F8FAFC;
+  --color-muted-foreground: #64748B;
 
   /* Focus & Feedback */
   --color-ring: var(--color-accent);
   
   /* Physics & Radius */
   --radius-lg: 12px;
-  --radius-xl: 20px;
-  --radius-2xl: 32px;
+  --radius-xl: 24px;
+  --radius-2xl: 40px;
   
   /* Shadows - Elevated & Diffused */
-  --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-float: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --shadow-subtle: 0 1px 3px 0 rgb(0 0 0 / 0.02);
+  --shadow-float: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+  --shadow-glass: 0 8px 32px 0 rgba(15, 23, 42, 0.04);
 
   /* Animations */
-  --animate-fade-in: fadeIn 0.4s ease-out forwards;
-  --animate-slide-up: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-scale-in: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  --animate-fade-in: fadeIn 0.6s ease-out forwards;
+  --animate-slide-up: slideUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-scale-in: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 
   @keyframes fadeIn {
     from { opacity: 0; }
@@ -57,12 +58,12 @@
   }
 
   @keyframes slideUp {
-    from { opacity: 0; transform: translateY(16px); }
+    from { opacity: 0; transform: translateY(24px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
   @keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.95); }
+    from { opacity: 0; transform: scale(0.98); }
     to { opacity: 1; transform: scale(1); }
   }
 }
@@ -70,7 +71,8 @@
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
-    font-feature-settings: "cv11", "ss01";
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv11", "ss01", "ss03";
   }
 
   body {
@@ -82,23 +84,55 @@
 
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.025em;
+    letter-spacing: -0.03em;
+    font-weight: 800;
   }
 }
 
 @layer utilities {
   .glass-panel {
-    background: rgba(255, 255, 255, 0.75);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
     box-shadow: var(--shadow-glass);
   }
 
-  .interactive-card {
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  .noise-overlay {
+    position: relative;
   }
-  
+
+  .noise-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    opacity: 0.03;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  }
+
+  .interactive-card {
+    transition: all 0.4s cubic-bezier(0.2, 1, 0.2, 1);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-hover);
+  }
+
   .interactive-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-float);

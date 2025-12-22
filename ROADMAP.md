@@ -7,37 +7,37 @@ This roadmap prioritizes 180 tasks across 9 sectors, sorted by their impact on p
 ## 📈 1. MVP Enhancements (Priority: Critical)
 *Focus: Stabilizing the core loop and ensuring the "2-Prompt Rule" is bulletproof.*
 
-1. **Robust Polling & State Sync** (High Impact)
+1. [x] **Robust Polling & State Sync** (High Impact)
    - *Description*: Replace `setInterval` with a recursive `setTimeout` pattern in `useJobPolling`.
    - *Implementation*: Add exponential backoff (starting at 2s, max 30s) and jitter. Ensure the UI reflects "Reconnecting" if the worker is unreachable.
-2. **Atomic Job Ingestion** (High Impact)
+2. [x] **Atomic Job Ingestion** (High Impact)
    - *Description*: Create the Job record in D1 *before* starting R2 uploads.
    - *Implementation*: Update `handleFilesSelected` to call `createJob` immediately. This provides a Job ID for session recovery even if the browser crashes during upload.
-3. **Optimized Base64 Pipeline** (High Impact)
+3. [x] **Optimized Base64 Pipeline** (High Impact)
    - *Description*: Move image resizing and Base64 encoding to a Web Worker or `OffscreenCanvas`.
    - *Implementation*: Prevent main-thread blocking during large batch uploads (50+ images) to keep the UI responsive.
-4. **Refined Prompt Concatenation** (High Impact)
+4. [x] **Refined Prompt Concatenation** (High Impact)
    - *Description*: Improve how Module System Prompts and Image-Specific Prompts are merged.
    - *Implementation*: Use a structured template: `[System Context] \n\n [Image Specific Instructions]`. Ensure no redundant whitespace or conflicting tokens.
-5. **Enhanced Error Mapping** (High Impact)
+5. [x] **Enhanced Error Mapping** (High Impact)
    - *Description*: Surface specific Gemini API errors (Safety, Quota, Model Busy) to the user.
    - *Implementation*: Update `functions/lib/gemini.ts` to catch specific error codes and map them to user-friendly strings in the `images.error_message` column.
-6. **Session Recovery 2.0** (Medium Impact)
+6. [x] **Session Recovery 2.0** (Medium Impact)
    - *Description*: Store the entire `AppState` (selected module, model, and staging images) in `localStorage`.
    - *Implementation*: Allow users to resume a "Setup" state if they accidentally close the tab before hitting "Process."
-7. **History Pagination** (Medium Impact)
+7. [x] **History Pagination** (Medium Impact)
    - *Description*: Load the Projects sidebar in chunks.
    - *Implementation*: Add `limit` and `offset` to the `getJobs` API. Implement an Intersection Observer in the sidebar to load more as the user scrolls.
-8. **Staging Grid Cleanup** (Medium Impact)
+8. [x] **Staging Grid Cleanup** (Medium Impact)
    - *Description*: Add a "Clear All" and "Remove Selected" functionality to the staging area.
    - *Implementation*: Allow users to prune their batch before ingestion without refreshing the page.
-9. **Refined Model Selection** (Medium Impact)
+9. [x] **Refined Model Selection** (Medium Impact)
    - *Description*: Make the model toggle (Flash vs Pro) more prominent and descriptive.
    - *Implementation*: Add a "Recommended" badge to Flash for speed and "High Fidelity" to Pro for quality.
-10. **Better Download Naming** (Low Impact)
+10. [x] **Better Download Naming** (Low Impact)
     - *Description*: Ensure ZIP files are named logically (e.g., `LightWork_Food_2025-12-22.zip`).
-    - *Implementation*: Update the client-side JSZip logic to use the Module name and current date.
-11. **Improved Image Previews** (Low Impact)
+    - *Implementation*: Implemented server-side JSZip logic in the download function to use the Module name and current date.
+11. [x] **Improved Image Previews** (Low Impact)
     - *Description*: Use a more efficient canvas-based thumbnail generator.
     - *Implementation*: Generate 200px thumbnails for the grid to reduce memory usage compared to full-res `URL.createObjectURL`.
 12. **Module Search** (Low Impact)
@@ -49,10 +49,10 @@ This roadmap prioritizes 180 tasks across 9 sectors, sorted by their impact on p
 14. **Visual Prompt Separator** (Low Impact)
     - *Description*: Show where the Module prompt ends in the Image Editor.
     - *Implementation*: A non-editable "System Context" block at the top of the PromptEditor textarea.
-15. **Improved Loading States** (Low Impact)
+15. [x] **Improved Loading States** (Low Impact)
     - *Description*: Add distinct "Uploading...", "Queued...", and "Processing..." badges.
     - *Implementation*: Map the `images.status` and `jobs.status` more granularly in the UI.
-16. **Refined Sidebar Layout** (Low Impact)
+16. [x] **Refined Sidebar Layout** (Low Impact)
     - *Description*: Add a "New Project" button clearly at the top.
     - *Implementation*: Ensure the primary action to start over is always visible and doesn't require clearing the current job manually.
 17. **Better Tooling** (Low Impact)
@@ -61,19 +61,29 @@ This roadmap prioritizes 180 tasks across 9 sectors, sorted by their impact on p
 18. **Improved Types** (Low Impact)
     - *Description*: Tighten TypeScript interfaces between Frontend and Backend.
     - *Implementation*: Use a shared `types.ts` file to ensure `ImageRecord` and `JobRecord` are identical in both environments.
-19. **Grid Layout Refinement** (Low Impact)
+19. [x] **Grid Layout Refinement** (Low Impact)
     - *Description*: Use CSS Grid `auto-fill` for better responsiveness.
     - *Implementation*: Ensure the grid doesn't have awkward gaps on ultra-wide or mobile screens.
-20. **Status Badge Contrast** (Low Impact)
+20. [x] **Status Badge Contrast** (Low Impact)
     - *Description*: Fix the "ONLINE" badge contrast issue identified in the audit.
     - *Implementation*: Use a darker green background with white text for better accessibility.
+
+---
+
+## 🎨 UI/UX Audit (Completed)
+*Focus: Elevating the design to "Luminous Stone" cinematic utility standard.*
+
+- [x] **Global Design System**: Introduced Slate/International Orange palette and high-fidelity typography.
+- [x] **Cinematic Utilities**: Added noise overlays, glass-morphism, and interactive card states.
+- [x] **Boutique Components**: Refactored Module Selector and Staging Grid for a premium feel.
+- [x] **Responsive Layout**: Optimized the dashboard for all screen sizes with a "Command Center" aesthetic.
 
 ---
 
 ## ⚙️ 2. Backend Systems (Priority: High)
 *Focus: Scalability, security, and cost-optimization.*
 
-1. **Zombie Job Cleanup (Cron)** (High Impact)
+1. [x] **Zombie Job Cleanup (Cron)** (High Impact)
    - *Description*: Automatically fail jobs that have been stuck in "PROCESSING" for too long.
    - *Implementation*: Use a Cloudflare Worker Cron Trigger to check for jobs with `updated_at < (now - 1 hour)` and mark them as FAILED.
 2. **R2 Signed URLs** (High Impact)

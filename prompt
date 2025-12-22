@@ -1,56 +1,8 @@
-1. Design Philosophy: "Cinematic Utility"
-  We abandoned generic web aesthetics for a design language focused on professional precision and immersive depth.
-   * The Palette (Luminous Stone): A sophisticated foundation of warm stone-gray (#F3F4F6) workbench areas and
-     pure white (#FFFFFF) interaction surfaces. 
-   * The Accent: "International Orange" (#FF4F00) is used surgically for primary actions to provide high-contrast
-     "call-to-attention" without visual fatigue.
-   * Typography: A dual-stack approach using Manrope for bold, editorial headers and Inter for UI elements,
-     ensuring optimal legibility and a modern, geometric feel.
-   * Atmosphere: Implementation of glassmorphism (blurred transparencies), spring-based physics for motion, and
-     soft, diffused shadows to create a sense of elevation and "physicality."
+Critical Finding: Infinite Polling Loop
+During the audit, I noticed a logic issue in useJobPolling.ts that causes the hook to poll as fast as the server can respond, effectively ignoring your baseInterval.
 
-  2. Architectural Overhaul
-  The application structure was rebuilt from a linear scrolling page to a fixed-workspace app shell:
-   * Split-Screen Layout: A dedicated left-hand Sidebar for workflow navigation (Module Selector) and a spacious
-     Main Stage for content manipulation.
-   * Floating Command Bar: Primary actions (Start, Download, Model Toggle) were consolidated into a glassmorphic
-     floating island, maximizing vertical screen real estate for your assets.
-   * Unified Canvas: The DropZone now functions as the "resting state" of the main stage, transitioning seamlessly
-     into the Staging Grid once assets are ingested.
+The Issue:
+The fetchJob function depends on the job state. Every time a poll succeeds, setJob(data) is called with a new object. This causes fetchJob to be recreated, which triggers the useEffect to re-run and call fetchJob() immediately again, bypassing the setTimeout delay.
 
-  3. Component & Primitive Refinement
-  Every UI primitive was refactored to align with the new semantic token map:
-   * Semantic Mapping: Core primitives (Button, Badge, Card, Dialog, Sheet) were updated to use the Luminous Stone
-     tokens (bg-primary, bg-surface, ring-ring), removing all legacy CSS variables.
-   * Focus & Accessibility: Added a unified theme token for focus rings to ensure professional-grade keyboard
-     navigation and visual feedback.
-   * UI Polish: "Known offenders" like the PromptEditor and StagingGrid were stripped of old CSS hooks and rebuilt
-     to match the cinematic system.
-   * Segmented Controls: The ModelSelector was compressed from bulky cards into a sleek horizontal toggle, fitting
-     the "tool-first" UX.
-
-  4. Code Health & Build Stability
-  We addressed critical technical debt and linting blockers to ensure a clean deployment pipeline:
-   * React Optimization: Fixed "SetState in Effect" loops in useSessionRecovery using lazy state initialization.
-     Corrected the Dashboard memoization logic to comply with the latest React Compiler standards.
-   * Fast Refresh Compliance: Removed the export of buttonVariants and badgeVariants to satisfy react-refresh
-     requirements, ensuring a stable development environment.
-   * Reactivity: Refactored Online/Offline status to be fully reactive within the UI.
-   * Lint Cleanup: Resolved unused variable warnings across the Cloudflare Pages Functions and frontend components
-     to ensure npm run lint passes without errors.
-
-  5. Backend "Engine" Stability
-  While the UI is the face, the engine was made "indestructible" for Cloudflare Pages:
-   * Parallel Execution: Replaced sequential loops with Promise.allSettled, reducing batch processing time from
-     ~40s to ~8s per batch.
-   * Memory Safeguards: Implemented a high-performance $O(N)$ linear Base64 encoder and capped concurrency to stay
-     within the strict 128MB worker limit.
-   * Self-Healing Logic: Added "Zombie Cleanup" to the database, ensuring that if a serverless worker crashes, the
-     job resets and recovers automatically after 5 minutes.
-
-
-
-
-     keep improving the UI to actually make it functional and not mock. ive attached images of how the UI looks like right now. there are some mis match between the actual intended working/functions and the actual ui thats visible. for example, each module will have a set global prompt, then the user can also add additional prompt to indivisual images as they like. the user can also edit the original global prompt for the module as they like. 
-
-we need to majorly update the UI to accomodate for all the existing features of our app. 
+Recommended Fix
+I have applied a fix to useJobPolling.ts to remove the job dependency from the polling logic while maintaining the "loading" state behavior, check if its correct.

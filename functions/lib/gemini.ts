@@ -96,9 +96,12 @@ export class GeminiService {
         // 2-prompt rule:
         // - Module system_prompt is the global base
         // - Image specific_prompt is appended (optional)
-        const fullPrompt = module.system_prompt + (specificPrompt
-            ? `\n\nAdditional instructions for this image: ${specificPrompt}`
-            : '');
+        const systemContext = (module.system_prompt || '').trim();
+        const imageInstructions = (specificPrompt || '').trim();
+
+        const fullPrompt = imageInstructions
+            ? `${systemContext}\n\n${imageInstructions}`
+            : systemContext;
 
         // Convert image to base64
         const base64Image = this.arrayBufferToBase64(imageBuffer);
@@ -144,11 +147,17 @@ export class GeminiService {
             });
 
             // Handle rate limiting (429) and server errors (503)
-            if (response.status === 429 || response.status === 503) {
-                console.log(`🍌 Rate limited (${response.status}), will retry later`);
+            if (response.status === 429) {
                 return {
                     success: false,
                     error: 'RATE_LIMITED',
+                };
+            }
+
+            if (response.status === 503) {
+                return {
+                    success: false,
+                    error: 'MODEL_OVERLOADED',
                 };
             }
 
@@ -156,8 +165,30 @@ export class GeminiService {
 
             // Check for API-level errors
             if (!response.ok || data.error) {
-                const errorMessage = data.error?.message || `HTTP ${response.status}`;
-                console.error(`🍌 Gemini API error:`, errorMessage);
+                const code = data.error?.code || response.status;
+                const message = data.error?.message || '';
+                
+                let errorMessage = 'An unexpected error occurred.';
+
+                if (code === 400) {
+                    if (message.includes('image') && message.includes('large')) {
+                        errorMessage = 'Image is too large for this model. Try a smaller file.';
+                    } else if (message.includes('unsupported')) {
+                        errorMessage = 'This image format is not supported by Gemini.';
+                    } else {
+                        errorMessage = 'Invalid request. Please check your prompt or image.';
+                    }
+                } else if (code === 401 || code === 403) {
+                    errorMessage = 'API Key issue. Please check your configuration.';
+                } else if (code === 404) {
+                    errorMessage = 'The selected AI model is currently unavailable.';
+                } else if (code === 429) {
+                    errorMessage = 'Rate limit exceeded. Please wait a moment.';
+                } else if (code >= 500) {
+                    errorMessage = 'Gemini is having trouble. Retrying...';
+                }
+
+                console.error(`🍌 Gemini API error [${code}]:`, message);
                 return {
                     success: false,
                     error: errorMessage,
@@ -166,9 +197,15 @@ export class GeminiService {
 
             // Check for content filtering
             if (data.promptFeedback?.blockReason) {
+                const reason = data.promptFeedback.blockReason;
+                let friendlyReason = 'Content blocked by safety filters.';
+                
+                if (reason === 'SAFETY') friendlyReason = 'Image or prompt triggered safety filters.';
+                else if (reason === 'OTHER') friendlyReason = 'Content blocked for policy reasons.';
+
                 return {
                     success: false,
-                    error: `Content blocked: ${data.promptFeedback.blockReason}`,
+                    error: `SAFETY_BLOCKED: ${friendlyReason}`,
                 };
             }
 
@@ -193,9 +230,15 @@ export class GeminiService {
             // Check finish reason for issues
             const finishReason = data.candidates?.[0]?.finishReason;
             if (finishReason && finishReason !== 'STOP') {
+                let reasonMsg = `Generation stopped: ${finishReason}`;
+                
+                if (finishReason === 'SAFETY') reasonMsg = 'Output blocked by safety filters.';
+                else if (finishReason === 'RECITATION') reasonMsg = 'Output blocked (copyright protection).';
+                else if (finishReason === 'OTHER') reasonMsg = 'Output blocked for policy reasons.';
+
                 return {
                     success: false,
-                    error: `Generation stopped: ${finishReason}`,
+                    error: reasonMsg,
                 };
             }
 
