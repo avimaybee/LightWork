@@ -1,8 +1,0 @@
-Critical Finding: Infinite Polling Loop
-During the audit, I noticed a logic issue in useJobPolling.ts that causes the hook to poll as fast as the server can respond, effectively ignoring your baseInterval.
-
-The Issue:
-The fetchJob function depends on the job state. Every time a poll succeeds, setJob(data) is called with a new object. This causes fetchJob to be recreated, which triggers the useEffect to re-run and call fetchJob() immediately again, bypassing the setTimeout delay.
-
-Recommended Fix
-I have applied a fix to useJobPolling.ts to remove the job dependency from the polling logic while maintaining the "loading" state behavior, check if its correct.

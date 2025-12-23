@@ -1,13 +1,108 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LightWork</title>
-  </head>
+    <title>LightWork. | AI Image Processor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=Lexend+Deca:wght@100..900&family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Noto Sans', 'sans-serif'],
+              heading: ['Lexend Deca', 'sans-serif'],
+              logo: ['Funnel Display', 'sans-serif'],
+            },
+            colors: {
+              stone: {
+                50: '#FAFAF9',
+                100: '#F5F5F4',
+                200: '#E7E5E4',
+                300: '#D6D3D1',
+                400: '#A8A29E',
+                500: '#78716C',
+                600: '#57534E',
+                700: '#44403C',
+                800: '#292524',
+                900: '#1C1917',
+              },
+              clay: {
+                50: '#FFF8F6',
+                100: '#FFEADD',
+                200: '#FFD5C0',
+                300: '#FDBA9F',
+                400: '#F0906F',
+                500: '#D97757', // Primary Clay
+                600: '#C25D3C',
+                700: '#9F462A',
+                800: '#833923',
+                900: '#4A1D11',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --font-sans: 'Noto Sans', sans-serif;
+        --color-accent: #D97757;
+        --color-bg-canvas: #F2F0E9;
+        --color-bg-panel: #FDFCFB;
+      }
+      body {
+        font-family: var(--font-sans);
+        background-color: var(--color-bg-canvas);
+        color: #292524;
+        -webkit-font-smoothing: antialiased;
+      }
+      
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Lexend Deca', sans-serif;
+      }
+
+      /* Refined Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #E7E5E4;
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #D6D3D1;
+      }
+
+      .glass-panel {
+        background: rgba(253, 252, 251, 0.95);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "jszip": "https://esm.sh/jszip@3.10.1",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>

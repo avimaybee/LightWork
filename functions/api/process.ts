@@ -1,86 +1,102 @@
-/**
- * POST /api/process - Trigger image processing on-demand
- * 
- * This endpoint allows triggering the image processing pipeline manually.
- * Call this after starting a job to begin processing immediately.
- */
 
-import type { Env, ApiResponse } from '../types';
-import { processImages, type ProcessResult } from '../lib/processor';
+import { GoogleGenAI } from "@google/genai";
 
-// POST /api/process - Trigger processing
-export const onRequestPost: PagesFunction<Env> = async (context) => {
-    const { env } = context;
+export async function onRequestPost(context) {
+    let jobId: string | null = null;
 
     try {
-        console.log('🍌 On-demand processing triggered');
+        const body = await context.request.json();
+        jobId = body.jobId;
+        const { model, systemPrompt, userPrompt } = body;
+        
+        // 1. Get Image Info from DB
+        const imageRecord = await context.env.DB.prepare("SELECT * FROM images WHERE id = ?").bind(jobId).first();
+        if (!imageRecord) return new Response("Image not found", { status: 404 });
 
-        const result = await processImages(env);
+        // 2. Get Image Data from R2
+        const obj = await context.env.STORAGE.get(imageRecord.r2_key_original);
+        if (!obj) return new Response("Source image missing in storage", { status: 404 });
 
-        const response: ApiResponse<ProcessResult> = {
-            success: true,
-            data: result,
-            message: result.processed > 0
-                ? `Processed ${result.processed} images (${result.completed} completed, ${result.failed} failed)`
-                : 'No pending images to process',
-        };
+        const arrayBuffer = await obj.arrayBuffer();
+        const b64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-        return new Response(JSON.stringify(response), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-        });
-    } catch (error) {
-        console.error('🍌 Processing error:', error);
+        // 3. Call Gemini
+        const ai = new GoogleGenAI({ apiKey: context.env.API_KEY });
+        
+        // Configure Request
+        const isPro = model === 'gemini-3-pro-image-preview';
+        const config: any = {};
+        
+        if (isPro) {
+            // Pro model supports specific image configs
+            config.imageConfig = {
+                imageSize: "2K" // Default to high quality for Pro
+            };
+        }
 
-        const response: ApiResponse = {
-            success: false,
-            error: error instanceof Error ? error.message : 'Processing failed',
-        };
-
-        return new Response(JSON.stringify(response), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-        });
-    }
-};
-
-// GET /api/process - Check processing status (for debugging)
-export const onRequestGet: PagesFunction<Env> = async (context) => {
-    const { env } = context;
-
-    try {
-        // Count pending images
-        const { results: pending } = await env.DB.prepare(
-            `SELECT COUNT(*) as count FROM images 
-             WHERE status IN ('PENDING', 'RETRY_LATER')`
-        ).all<{ count: number }>();
-
-        // Count processing jobs
-        const { results: jobs } = await env.DB.prepare(
-            `SELECT COUNT(*) as count FROM jobs WHERE status = 'PROCESSING'`
-        ).all<{ count: number }>();
-
-        const response: ApiResponse<{ pending_images: number; processing_jobs: number }> = {
-            success: true,
-            data: {
-                pending_images: pending?.[0]?.count || 0,
-                processing_jobs: jobs?.[0]?.count || 0,
+        const response = await ai.models.generateContent({
+            model: model || 'gemini-2.5-flash-image',
+            contents: {
+                parts: [
+                    { inlineData: { data: b64Data, mimeType: 'image/jpeg' } },
+                    { text: `${systemPrompt}\n\n${userPrompt || ''}` }
+                ]
             },
-        };
-
-        return new Response(JSON.stringify(response), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
+            config: config
         });
-    } catch (error) {
-        const response: ApiResponse = {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to get status',
-        };
 
-        return new Response(JSON.stringify(response), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
+        // 4. Extract Result safely (Iterate through parts)
+        let imageBytes = null;
+        
+        if (response.candidates?.[0]?.content?.parts) {
+            for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData && part.inlineData.data) {
+                    imageBytes = part.inlineData.data;
+                    break; 
+                }
+            }
+        }
+
+        if (!imageBytes) {
+             console.error("Gemini response missing image data:", JSON.stringify(response));
+             // Check if there was a text refusal or error message
+             const textPart = response.candidates?.[0]?.content?.parts?.find(p => p.text);
+             const errorMsg = textPart ? textPart.text : "Model returned no image data.";
+             throw new Error(errorMsg);
+        }
+
+        // 5. Save Result to R2
+        const resultKey = `result-${jobId}.png`;
+        // Decode base64 to Uint8Array for storage
+        const binaryString = atob(imageBytes);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        await context.env.STORAGE.put(resultKey, bytes, {
+            httpMetadata: { contentType: 'image/png' }
         });
+
+        // 6. Update DB
+        await context.env.DB.prepare("UPDATE images SET status = ?, r2_key_result = ? WHERE id = ?")
+            .bind('completed', resultKey, jobId).run();
+
+        // Return bytes to frontend for immediate display without refetch
+        return new Response(JSON.stringify({ success: true, imageBytes })); 
+
+    } catch (e) {
+        // Log error and update DB status
+        try {
+            if (jobId) {
+                await context.env.DB.prepare("UPDATE images SET status = ?, error_msg = ? WHERE id = ?")
+                    .bind('error', e.message, jobId).run();
+            }
+        } catch (dbError) {
+            // Ignore DB update errors during crash
+        }
+        
+        return new Response(JSON.stringify({ success: false, error: e.message }));
     }
-};
+}

@@ -1,0 +1,5 @@
+{
+  "name": "LightWork",
+  "description": "Cinematic Utility AI Image Processor using Gemini Nano Banana models.",
+  "requestFramePermissions": []
+}
