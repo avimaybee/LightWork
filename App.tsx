@@ -324,6 +324,9 @@ export default function App() {
             } catch (err) {
                 updateJob(job.id, { status: 'error', errorMsg: 'Unexpected error' });
             }
+            
+            // Artificial delay to respect RPM limits (Free Tier)
+            await wait(2000);
             await processNext(workerId);
         };
 

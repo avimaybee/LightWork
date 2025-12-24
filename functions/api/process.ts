@@ -34,10 +34,12 @@ export async function onRequestPost(context) {
         // 2. Use compressed image data if provided (reduces tokens by ~90%)
         // Otherwise fall back to R2
         let b64Data: string;
+        let mimeType = 'image/jpeg'; // Default for compressed data
 
         if (compressedImageData) {
             console.log("[Process API] Using client-compressed image, length:", compressedImageData.length);
             b64Data = compressedImageData;
+            mimeType = 'image/jpeg';
         } else {
             console.log("[Process API] No compressed data, loading from R2...");
             const obj = await context.env.STORAGE.get(imageRecord.r2_key_original);
@@ -48,6 +50,15 @@ export async function onRequestPost(context) {
 
             const arrayBuffer = await obj.arrayBuffer();
             console.log("[Process API] Image loaded from R2, size:", arrayBuffer.byteLength);
+            
+            if (obj.httpMetadata && obj.httpMetadata.contentType) {
+                mimeType = obj.httpMetadata.contentType;
+            } else {
+                // Fallback inference
+                if (imageRecord.filename.toLowerCase().endsWith('.png')) mimeType = 'image/png';
+                else if (imageRecord.filename.toLowerCase().endsWith('.webp')) mimeType = 'image/webp';
+            }
+            console.log("[Process API] R2 Image MimeType:", mimeType);
 
             // Convert to base64 safely (chunked to avoid stack overflow)
             b64Data = arrayBufferToBase64(arrayBuffer);
@@ -74,7 +85,7 @@ export async function onRequestPost(context) {
                 { text: fullPrompt },
                 {
                     inlineData: {
-                        mimeType: 'image/png',
+                        mimeType: mimeType,
                         data: b64Data
                     }
                 }

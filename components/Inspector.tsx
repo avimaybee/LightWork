@@ -227,7 +227,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                 onUpdateJob(job.id, { fileName: `${cleanName}.${ext}` });
             }
             // Add small delay between requests to avoid rate limits
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => setTimeout(r, 2000));
         }
         setIsRenaming(false);
     };
