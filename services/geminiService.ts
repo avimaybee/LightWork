@@ -7,6 +7,7 @@ interface GeminiResponse {
   success: boolean;
   imageBytes?: string;
   error?: string;
+  details?: string;
   isRetryable?: boolean;
   retryAfterSeconds?: number;
 }
@@ -62,9 +63,14 @@ export const processImageWithGemini = async (
       return { success: true, imageBytes: result.imageBytes };
     }
 
+    if (result.details) {
+      console.error("[GeminiService] Backend Error Details:", result.details);
+    }
+
     return {
       success: false,
       error: result.error || "Backend processing failed",
+      details: result.details,
       isRetryable: result.isRetryable,
       retryAfterSeconds: result.retryAfterSeconds
     };

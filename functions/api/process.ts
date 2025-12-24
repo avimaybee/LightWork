@@ -114,7 +114,12 @@ export async function onRequestPost(context) {
         }
 
         // 3. Initialize Gemini AI
-        const ai = new GoogleGenAI({ apiKey: context.env.GEMINI_API_KEY });
+        const apiKey = context.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            console.error("[Process API] FATAL: GEMINI_API_KEY is missing in environment variables!");
+            throw new Error("Server Misconfiguration: GEMINI_API_KEY is missing. Please check .dev.vars (local) or Cloudflare Secrets (production).");
+        }
+        const ai = new GoogleGenAI({ apiKey });
 
         // Determine model - use gemini-2.5-flash-image for image editing
         const modelName = model || 'gemini-2.5-flash-image';
@@ -124,11 +129,12 @@ export async function onRequestPost(context) {
         const fullPrompt = `${systemPrompt}\n\n${userPrompt || ''}`.trim();
         console.log("[Process API] Prompt length:", fullPrompt.length);
 
-        // 4. Call Gemini API with correct structure as per Research PDF
+        // 4. Call Gemini API
         console.log("[Process API] Calling Gemini API...");
-        const requestPayload = {
-            // The SDK accepts bare model names, but prefixing avoids regional aliasing edge cases
-            model: modelName.startsWith('models/') ? modelName : `models/${modelName}`,
+
+        // Simplified payload matching working generate.ts pattern, but tailored for image generation if supported
+        const requestPayload: any = {
+            model: modelName,
             contents: [{
                 role: 'user',
                 parts: [
@@ -141,16 +147,14 @@ export async function onRequestPost(context) {
                     }
                 ]
             }],
-            // As of 2025-12 docs, response_modalities sits inside GenerateContentConfig for image models
-            config: {
-                responseModalities: ['IMAGE']
-            },
             generationConfig: {
-                temperature: 1
+                temperature: 1,
+                // Attempt to request image response if the model supports it via standard config
+                responseMimeType: "image/png"
             }
         };
 
-        console.log("[Process API] Gemini request payload", { model: requestPayload.model, responseModalities: requestPayload.config.responseModalities });
+        console.log("[Process API] Payload constructed");
 
         const response = await ai.models.generateContent(requestPayload);
 
@@ -170,7 +174,7 @@ export async function onRequestPost(context) {
             // Check if we got text instead
             const textPart = parts.find(p => p.text);
             const errorMsg = textPart
-                ? `Model returned text instead of image: ${textPart.text.substring(0, 150)}`
+                ? `Model returned text instead of image: ${textPart.text.substring(0, 150)}...`
                 : "Model returned no image data";
 
             throw new Error(errorMsg);
@@ -200,9 +204,20 @@ export async function onRequestPost(context) {
         console.log("[Process API] Job completed successfully");
         return jsonResponse({ success: true, imageBytes, requestId });
 
-    } catch (e) {
+    } catch (e: any) {
         const errorMessage = e?.message || 'Unknown error';
         console.error("[Process API] Error:", errorMessage);
+
+        // Safe Error logging
+        const safeErrorDetails = {
+            name: e?.name,
+            message: e?.message,
+            stack: e?.stack,
+            // Avoid circular JSON stringify of full response objects
+            status: e?.status || e?.response?.status,
+            statusText: e?.statusText || e?.response?.statusText
+        };
+        console.error("[Process API] Safe Error Details:", JSON.stringify(safeErrorDetails, null, 2));
 
         const retryAfterHeader = e?.response?.headers?.get?.('Retry-After') ?? null;
 
@@ -234,9 +249,11 @@ export async function onRequestPost(context) {
             ? { 'Retry-After': String(retryAfterSeconds) }
             : undefined;
 
+        // RETURN DETAILED ERROR TO FRONTEND FOR DEBUGGING
         return jsonResponse({
             success: false,
-            error: errorMessage.substring(0, 500),
+            error: errorMessage,
+            details: JSON.stringify(safeErrorDetails), // Send safe details
             isRetryable: isRateLimited,
             retryAfterSeconds: retryAfterSeconds,
             requestId

@@ -1,40 +1,53 @@
 # ✨ LightWork
 
 > **Cinematic Utility AI Image Processor**  
-> High-fidelity batch image refinement using Google's Gemini Multimodal models.
+> Professional-grade batch image refinement powered by Google's Gemini Multimodal models and Cloudflare's Edge architecture.
 
-LightWork is a professional-grade workspace designed for photographers, retouchers, and creative directors. It bridges the gap between raw generative AI and structured asset workflows, allowing for consistent, high-volume image enhancement without the "slot machine" randomness of typical AI tools.
+LightWork is a high-fidelity workspace designed for photographers, retail brands, and creative directors. It bridges the gap between raw generative AI and structured asset pipelines, allowing for consistent, high-volume image enhancement without the unpredictability of consumer AI tools.
 
-## Core Capabilities
+## ⚡ Core Capabilities
 
-### ⚡ Batch Intelligence
-Stop prompting one image at a time. LightWork uses a **Global Context** system (Modules) to apply consistent art direction across entire photoshoots. Define your "System Context" once, and process hundreds of assets with unified lighting, color grading, and composition rules.
+### 🍱 Batch Intelligence (Modules)
+LightWork uses a **Global Context** system called Modules to apply consistent art direction across entire photoshoots. Define your "System Prompt" once, and process hundreds of assets with unified lighting, color grading, and composition rules.
+- **Specialized Presets**: Engineered modules for Food, Product, Portrait, and Real Estate workflows.
+- **Custom Modules**: Create and save your own art direction logic to the database for future sessions.
 
-### 🎛️ Specialized Modules
-The application comes equipped with engineered presets for commercial photography workflows:
-- **Food**: Plating enhancement, "Golden Hour" relighting, and macro sharpening.
-- **Product**: E-commerce studio cleanup, infinite white backgrounds, and material synthesis.
-- **Real Estate**: "Flambient" blending simulation, vertical straightening, and virtual staging.
-- **Portrait**: Frequency separation simulation and studio lighting reconstruction.
+### 🔍 The Precision Inspector
+Detailed management for single and multi-selection workflows:
+- **Magic Polish**: AI-enhanced prompt refinement to convert rough ideas into technical lighting and composition instructions.
+- **Auto-Draft**: Visual analysis of source images to generate base descriptions and editing starting points.
+- **Smart Rename**: High-fidelity vision analysis to generate SEO-friendly, descriptive filenames.
+- **Comparison View**: Professional lightbox with split-view capabilities to verify pixel-level changes.
 
-### 🚀 Dual-Engine Processing
-- **FAST Mode**: Powered by `gemini-2.5-flash-image`. Near-instant feedback for composition and lighting checks.
-- **PRO Mode**: Powered by `gemini-3-pro-image-preview`. Maximum resolution, complex reasoning, and "thinking" capabilities for difficult restoration tasks.
+### 🚀 Performance & Scale
+- **Dual-Engine Processing**:
+  - **FAST Mode**: Powered by `gemini-2.5-flash-image` for rapid turnaround and composition checks.
+  - **PRO Mode**: Powered by `gemini-3-pro-image-preview` for maximum resolution and complex reasoning.
+- **Edge Efficiency**: Client-side image compression reduces token consumption by ~90%, ensuring speed even on limited connections.
+- **Rate-Limit Intelligence**: Built-in backoff logic and request spacing to maximize throughput on Google's AI infrastructure.
 
-### 🔍 Precision Inspector
-- **Smart Rename**: Auto-generate SEO-friendly filenames based on image content using vision analysis.
-- **Magic Polish**: AI-enhanced prompt refinement to convert rough ideas into technical instructions.
-- **Comparison View**: Professional split-slider (A/B) to verify pixel-level changes against the original source.
+## 🛠️ Tech Stack
 
-## Architecture
+Built on a modern, serverless architecture for maximum performance and cost-efficiency:
 
-LightWork is built on a modern, serverless stack designed for edge performance and data security:
+- **Frontend**: [React 19](https://react.dev/) + [Tailwind CSS](https://tailwindcss.com/) + [Lucide Icons](https://lucide.dev/).
+- **API Layers**: [Cloudflare Pages Functions](https://developers.cloudflare.com/pages/framework-guides/deploy-a-full-stack-site/) (Edge-side TypeScript).
+- **Persistent State**: [Cloudflare D1](https://developers.cloudflare.com/d1/) (SQLite at the edge) for projects, jobs, and custom modules.
+- **Asset Storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/) (S3-compatible) for secure, low-latency image hosting.
+- **AI Engine**: [Google Gemini SDK](https://ai.google.dev/) (2.5 & 3.0 Multimodal models).
 
-- **Frontend**: React 19 + Tailwind CSS (deployed on Cloudflare Pages).
-- **Backend**: Cloudflare Functions (Edge Workers) for secure API proxying.
-- **Database**: Cloudflare D1 (SQLite at the edge) for persistent job state and metadata.
-- **Storage**: Cloudflare R2 (S3-compatible) for secure, low-latency asset hosting.
-- **AI**: Google GenAI SDK integration with Gemini 2.5 and 3.0 models.
+## 📂 Project Structure
+
+```text
+/
+├── components/          # React UI Components (Sidebar, Inspector, CommandDock)
+├── functions/           # Cloudflare Pages API Endpoints (D1/R2 Logic)
+│   └── api/             # RESTful API (Jobs, Modules, Projects, Process)
+├── services/            # Frontend API & Gemini abstraction layers
+├── src/                 # Main application entry and global styles
+├── types.ts             # Unified TypeScript definitions
+└── schema.sql           # Database schema for D1 initialization
+```
 
 ---
 
