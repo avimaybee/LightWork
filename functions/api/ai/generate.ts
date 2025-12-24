@@ -1,52 +1,121 @@
 
 import { GoogleGenAI } from "@google/genai";
 
+// Parse retry delay from Google's rate limit error
+function parseRetryDelay(errorMessage: string): number {
+    const retryMatch = errorMessage.match(/retryDelay[":]+\s*(\d+)s/i);
+    if (retryMatch) {
+        return parseInt(retryMatch[1], 10);
+    }
+    return 30; // Default to 30 seconds
+}
+
+// Check if error is rate limit related
+function isRateLimitError(errorMessage: string): boolean {
+    return errorMessage.includes('429') ||
+        errorMessage.includes('RESOURCE_EXHAUSTED') ||
+        errorMessage.includes('retryDelay');
+}
+
+// Helper for JSON response with proper headers
+function jsonResponse(data: any, status: number = 200): Response {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: { 'Content-Type': 'application/json' }
+    });
+}
+
 export async function onRequestPost(context) {
     try {
-        const { type, jobId, text } = await context.request.json();
+        // Accept compressedImageData from client to avoid R2 read + OOM
+        const { type, jobId, text, compressedImageData } = await context.request.json();
+
+        console.log("[AI Generate] Request type:", type, "jobId:", jobId, "hasCompressedData:", !!compressedImageData);
+
         const ai = new GoogleGenAI({ apiKey: context.env.GEMINI_API_KEY });
-        const model = 'gemini-2.5-flash-image';
+
+        // Use lighter models for analysis tasks (higher rate limits)
+        const modelName = 'gemini-2.5-flash-lite';
 
         let prompt = "";
-        let imagePart = null;
+        let contents = [];
 
         if (type === 'enhance') {
-            // Text-only task
-            if (!text) return new Response("Missing text", { status: 400 });
-            prompt = `Refine the following image editing instruction to be more technical, precise, and effective for an AI image generator. Keep it concise. Input: "${text}"`;
+            // Text-only task - no image needed
+            if (!text) return jsonResponse({ success: false, error: "Missing text" }, 400);
+            prompt = `Refine the following image editing instruction to be more technical, precise, and effective for an AI image generator. Keep it concise. Only output the refined instruction, nothing else. Input: "${text}"`;
+            contents = [{ text: prompt }];
         }
         else if (type === 'rename' || type === 'describe') {
-            // Vision tasks
-            if (!jobId) return new Response("Missing jobId", { status: 400 });
+            // Vision tasks - require image data
+            if (!compressedImageData) {
+                console.log("[AI Generate] No compressed image data provided");
+                return jsonResponse({ success: false, error: "Compressed image data required" }, 400);
+            }
 
-            // Fetch image from R2
-            const imageRecord = await context.env.DB.prepare("SELECT r2_key_original FROM images WHERE id = ?").bind(jobId).first();
-            if (!imageRecord) return new Response("Image not found", { status: 404 });
-
-            const obj = await context.env.STORAGE.get(imageRecord.r2_key_original);
-            const arrayBuffer = await obj.arrayBuffer();
-            const b64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-
-            imagePart = { inlineData: { data: b64Data, mimeType: 'image/jpeg' } };
+            console.log("[AI Generate] Using client-compressed image, length:", compressedImageData.length);
 
             if (type === 'rename') {
-                prompt = "Analyze this image and generate a short, SEO-friendly, kebab-case filename (e.g. 'sunset-beach-portrait'). Do not include file extension.";
+                prompt = "Analyze this image and generate a short, SEO-friendly, kebab-case filename (e.g. 'sunset-beach-portrait'). Do not include file extension. Only output the filename, nothing else.";
             } else {
                 prompt = "Analyze this image and provide a detailed technical description of the subject, lighting, and composition that could be used as a prompt to recreate or edit it.";
             }
+
+            // Use client-provided compressed image (avoids R2 read + OOM)
+            contents = [
+                { text: prompt },
+                {
+                    inlineData: {
+                        mimeType: 'image/jpeg',
+                        data: compressedImageData
+                    }
+                }
+            ];
         } else {
-            return new Response("Invalid type", { status: 400 });
+            return jsonResponse({ success: false, error: "Invalid type" }, 400);
         }
 
-        const parts = imagePart ? [imagePart, { text: prompt }] : [{ text: prompt }];
+        console.log("[AI Generate] Calling model:", modelName);
 
         const response = await ai.models.generateContent({
-            model: model,
-            contents: { parts }
+            model: modelName,
+            contents: contents
         });
 
-        return new Response(JSON.stringify({ success: true, result: response.text.trim() }));
+        // Extract text from response
+        let resultText = "";
+        if (response.candidates?.[0]?.content?.parts) {
+            for (const part of response.candidates[0].content.parts) {
+                if (part.text) {
+                    resultText += part.text;
+                }
+            }
+        }
+
+        console.log("[AI Generate] Response length:", resultText.length);
+
+        if (!resultText) {
+            throw new Error("No text response from model");
+        }
+
+        return jsonResponse({ success: true, result: resultText.trim() });
     } catch (e) {
-        return new Response(JSON.stringify({ success: false, error: e.message }));
+        const errorMessage = e.message || 'Unknown error';
+        console.error("[AI Generate] Error:", errorMessage);
+
+        // Check for rate limit and parse retry delay
+        const isRateLimited = isRateLimitError(errorMessage);
+        const retryAfterSeconds = isRateLimited ? parseRetryDelay(errorMessage) : 0;
+
+        if (isRateLimited) {
+            console.log("[AI Generate] Rate limited, retry after:", retryAfterSeconds, "seconds");
+        }
+
+        return jsonResponse({
+            success: false,
+            error: isRateLimited ? `Rate limited. Retry in ${retryAfterSeconds}s` : errorMessage,
+            isRetryable: isRateLimited,
+            retryAfterSeconds: retryAfterSeconds
+        });
     }
 }

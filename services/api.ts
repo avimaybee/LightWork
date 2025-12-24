@@ -49,12 +49,12 @@ export const api = {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('projectId', projectId);
-            
+
             const res = await fetch(`${API_BASE}/images/upload`, {
                 method: 'POST',
                 body: formData
             });
-            
+
             if (!res.ok) throw new Error("Upload failed");
             return await res.json();
         } catch (e) {
@@ -64,16 +64,18 @@ export const api = {
     },
 
     // Processing & AI
-    processImage: async (jobId: string, model: string, systemPrompt: string, userPrompt: string): Promise<any> => {
+    // compressedImageData: optional base64 string of compressed image to bypass R2 read
+    processImage: async (jobId: string, model: string, systemPrompt: string, userPrompt: string, compressedImageData?: string): Promise<any> => {
         const res = await fetch(`${API_BASE}/process`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId, model, systemPrompt, userPrompt })
+            body: JSON.stringify({ jobId, model, systemPrompt, userPrompt, compressedImageData })
         });
         return await res.json();
     },
 
-    generateAI: async (type: 'enhance' | 'rename' | 'describe', payload: { jobId?: string, text?: string }): Promise<string | null> => {
+    // AI Generation - for rename/describe, compressedImageData must be provided
+    generateAI: async (type: 'enhance' | 'rename' | 'describe', payload: { jobId?: string, text?: string, compressedImageData?: string }): Promise<{ success: boolean, result?: string, error?: string, isRetryable?: boolean, retryAfterSeconds?: number }> => {
         try {
             const res = await fetch(`${API_BASE}/ai/generate`, {
                 method: 'POST',
@@ -81,10 +83,10 @@ export const api = {
                 body: JSON.stringify({ type, ...payload })
             });
             const data = await res.json();
-            return data.success ? data.result : null;
+            return data;
         } catch (e) {
             console.error("AI Generation failed", e);
-            return null;
+            return { success: false, error: 'Network error' };
         }
     },
 
@@ -96,7 +98,7 @@ export const api = {
             return await res.json();
         } catch (e) {
             console.warn("Using default modules fallback");
-            return []; 
+            return [];
         }
     },
 
