@@ -56,9 +56,10 @@ export const Inspector: React.FC<InspectorProps> = ({
         };
 
         const handleAutoDraft = async () => {
-            if (!job.file) return; // Need file for client-side compression
+            const imageSource = job.file || job.thumbnailUrl || job.originalUrl;
+            if (!imageSource) return;
             setIsAutoDrafting(true);
-            const response = await generateImageDescription(job.file);
+            const response = await generateImageDescription(imageSource);
             if (response.success && response.result) {
                 onUpdateJob(job.id, { localPrompt: response.result });
             }
@@ -66,9 +67,10 @@ export const Inspector: React.FC<InspectorProps> = ({
         };
 
         const handleSmartRename = async () => {
-            if (!job.file) return; // Need file for client-side compression
+            const imageSource = job.file || job.thumbnailUrl || job.originalUrl;
+            if (!imageSource) return;
             setIsRenaming(true);
-            const response = await generateSmartFilename(job.file);
+            const response = await generateSmartFilename(imageSource);
             if (response.success && response.result) {
                 const ext = job.fileName.split('.').pop() || 'png';
                 const cleanName = response.result.replace(/\.[^/.]+$/, "");
@@ -127,9 +129,9 @@ export const Inspector: React.FC<InspectorProps> = ({
                                 <h3 className="text-sm font-bold text-stone-900 truncate font-sans" title={job.fileName}>{job.fileName}</h3>
                                 <div className="flex items-center gap-2">
                                     <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${job.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                            job.status === 'error' ? 'bg-red-100 text-red-700' :
-                                                job.status === 'processing' ? 'bg-amber-100 text-amber-700' :
-                                                    'bg-stone-100 text-stone-500'
+                                        job.status === 'error' ? 'bg-red-100 text-red-700' :
+                                            job.status === 'processing' ? 'bg-amber-100 text-amber-700' :
+                                                'bg-stone-100 text-stone-500'
                                         }`}>
                                         {job.status}
                                     </span>
@@ -219,15 +221,16 @@ export const Inspector: React.FC<InspectorProps> = ({
     const handleBatchRename = async () => {
         setIsRenaming(true);
         for (const job of selectedJobs) {
-            if (!job.file) continue; // Skip jobs without file
-            const response = await generateSmartFilename(job.file);
+            const imageSource = job.file || job.thumbnailUrl || job.originalUrl;
+            if (!imageSource) continue;
+            const response = await generateSmartFilename(imageSource);
             if (response.success && response.result) {
                 const ext = job.fileName.split('.').pop() || 'png';
                 const cleanName = response.result.replace(/\.[^/.]+$/, "");
                 onUpdateJob(job.id, { fileName: `${cleanName}.${ext}` });
             }
             // Add small delay between requests to avoid rate limits
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, 500));
         }
         setIsRenaming(false);
     };

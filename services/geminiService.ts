@@ -22,8 +22,6 @@ export const processImageWithGemini = async (
     if (!jobId) throw new Error("Job ID required for backend processing");
 
     // Compress image client-side to reduce token consumption
-    // 12MP images can consume thousands of tokens, causing rate limits
-    // Resizing to 1536px max reduces to ~1000 tokens while maintaining quality
     let compressedImageData: string | undefined;
 
     if (file) {
@@ -68,12 +66,32 @@ interface AIResponse {
   retryAfterSeconds?: number;
 }
 
-// Smart Rename - requires file for client-side compression
-export const generateSmartFilename = async (file: File | Blob): Promise<AIResponse> => {
+// Helper to get compressed image data from file OR url
+async function getCompressedImageData(fileOrUrl: File | Blob | string): Promise<string> {
+  let blob: Blob;
+
+  if (typeof fileOrUrl === 'string') {
+    // It's a URL - fetch the image
+    console.log("[GeminiService] Fetching image from URL...");
+    const response = await fetch(fileOrUrl);
+    if (!response.ok) throw new Error("Failed to fetch image");
+    blob = await response.blob();
+  } else {
+    blob = fileOrUrl;
+  }
+
+  return await compressImageForAI(blob, 1024);
+}
+
+// Smart Rename - accepts file/blob or URL string
+export const generateSmartFilename = async (fileOrUrl: File | Blob | string): Promise<AIResponse> => {
   try {
-    const compressedImageData = await compressImageForAI(file, 1024); // Smaller for analysis
+    console.log("[GeminiService] Smart Rename starting...");
+    const compressedImageData = await getCompressedImageData(fileOrUrl);
+    console.log("[GeminiService] Image compressed for rename, calling API...");
     return await api.generateAI('rename', { compressedImageData });
   } catch (e: any) {
+    console.error("[GeminiService] Smart Rename error:", e);
     return { success: false, error: e.message };
   }
 };
@@ -83,12 +101,15 @@ export const enhancePrompt = async (originalPrompt: string): Promise<AIResponse>
   return await api.generateAI('enhance', { text: originalPrompt });
 };
 
-// Auto Draft / Describe - requires file for client-side compression
-export const generateImageDescription = async (file: File | Blob): Promise<AIResponse> => {
+// Auto Draft / Describe - accepts file/blob or URL string
+export const generateImageDescription = async (fileOrUrl: File | Blob | string): Promise<AIResponse> => {
   try {
-    const compressedImageData = await compressImageForAI(file, 1024); // Smaller for analysis
+    console.log("[GeminiService] Auto Draft starting...");
+    const compressedImageData = await getCompressedImageData(fileOrUrl);
+    console.log("[GeminiService] Image compressed for describe, calling API...");
     return await api.generateAI('describe', { compressedImageData });
   } catch (e: any) {
+    console.error("[GeminiService] Auto Draft error:", e);
     return { success: false, error: e.message };
   }
 };
