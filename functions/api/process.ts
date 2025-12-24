@@ -85,10 +85,12 @@ export async function onRequestPost(context) {
         const fullPrompt = `${systemPrompt}\n\n${userPrompt || ''}`.trim();
         console.log("[Process API] Prompt length:", fullPrompt.length);
 
-        // 4. Call Gemini API with responseModalities for image generation
+        // 4. Call Gemini API with correct structure as per Research PDF
+        console.log("[Process API] Calling Gemini API...");
         const response = await ai.models.generateContent({
             model: modelName,
-            contents: {
+            contents: [{
+                role: 'user',
                 parts: [
                     { text: fullPrompt },
                     {
@@ -98,45 +100,35 @@ export async function onRequestPost(context) {
                         }
                     }
                 ]
-            },
+            }],
             config: {
-                responseModalities: ['image', 'text']
+                responseModalities: ['IMAGE'], // Request image output explicitly
+                temperature: 0.4 // Lower temperature for stability
             }
         });
 
-
-
         console.log("[Process API] Gemini response received");
 
-        // 5. Extract generated image from response.candidates[0].content.parts
-        let imageBytes = null;
-        let textResponse = null;
+        // 5. Extract generated image from response candidates
+        const parts = response.candidates?.[0]?.content?.parts || [];
+        const imagePart = parts.find(p => p.inlineData);
 
-        if (response.candidates?.[0]?.content?.parts) {
-            for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData && part.inlineData.data) {
-                    imageBytes = part.inlineData.data;
-                    console.log("[Process API] Found image in response, length:", imageBytes.length);
-                    break;
-                }
-                if (part.text) {
-                    textResponse = part.text;
-                    console.log("[Process API] Text response:", part.text.substring(0, 200));
-                }
-            }
-        }
-
-        if (!imageBytes) {
+        if (!imagePart || !imagePart.inlineData || !imagePart.inlineData.data) {
             // Log full response for debugging
-            console.error("[Process API] Full response structure:", JSON.stringify(response.candidates?.[0]?.content).substring(0, 1000));
-            const errorMsg = textResponse
-                ? `Model returned text instead of image: ${textResponse.substring(0, 150)}`
-                : "Model returned no image data - check if prompt is compatible with image editing";
-            console.error("[Process API] No image in response:", errorMsg);
+            console.error("[Process API] Full response structure:", JSON.stringify(response, null, 2));
+
+            // Check if we got text instead
+            const textPart = parts.find(p => p.text);
+            const errorMsg = textPart
+                ? `Model returned text instead of image: ${textPart.text.substring(0, 150)}`
+                : "Model returned no image data";
+
             throw new Error(errorMsg);
         }
 
         // 6. Save Result to R2
+        const imageBytes = imagePart.inlineData.data;
+
         const resultKey = `result-${jobId}.png`;
         const binaryString = atob(imageBytes);
         const len = binaryString.length;

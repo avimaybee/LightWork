@@ -292,13 +292,15 @@ export default function App() {
             updateJob(job.id, { status: 'processing', errorMsg: undefined });
 
             try {
-                // Note: processImageWithGemini now uses api.processImage internally
+                // Pass file or URL - compression will always happen client-side
+                // This is CRITICAL to avoid hitting Gemini TPM limits with large images
+                const imageSource = job.file || job.thumbnailUrl || job.originalUrl;
                 const result = await processImageWithGemini(
-                    job.file as File, // Mock file passing, backend uses ID
+                    imageSource,
                     freshProject.modulePrompt,
                     job.localPrompt,
                     freshProject.selectedMode === 'fast' ? AppModel.FAST : AppModel.PRO,
-                    job.id // Important: Pass ID
+                    job.id
                 );
 
                 if (result.success && result.imageBytes) {
@@ -324,7 +326,7 @@ export default function App() {
             } catch (err) {
                 updateJob(job.id, { status: 'error', errorMsg: 'Unexpected error' });
             }
-            
+
             // Artificial delay to respect RPM limits (Free Tier)
             await wait(2000);
             await processNext(workerId);
