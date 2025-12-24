@@ -3,10 +3,8 @@ import { GoogleGenAI } from "@google/genai";
 
 // Parse retry delay from Google's rate limit error
 function parseRetryDelay(errorMessage: string): number {
-    const retryMatch = errorMessage.match(/retryDelay[":]+\s*(\d+)s/i);
-    if (retryMatch) {
-        return parseInt(retryMatch[1], 10);
-    }
+    const retryMatch = errorMessage.match(/retryDelay[^0-9]*"?(\d+)s"?/i);
+    if (retryMatch) return parseInt(retryMatch[1], 10);
     return 30; // Default to 30 seconds
 }
 
@@ -18,10 +16,10 @@ function isRateLimitError(errorMessage: string): boolean {
 }
 
 // Helper for JSON response with proper headers
-function jsonResponse(data: any, status: number = 200): Response {
+function jsonResponse(data: any, status: number = 200, extraHeaders?: Record<string, string>): Response {
     return new Response(JSON.stringify(data), {
         status,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', ...(extraHeaders || {}) }
     });
 }
 
@@ -113,11 +111,15 @@ export async function onRequestPost(context) {
             console.log("[AI Generate] Rate limited, retry after:", retryAfterSeconds, "seconds");
         }
 
+        const retryHeaders = isRateLimited && retryAfterSeconds > 0
+            ? { 'Retry-After': String(retryAfterSeconds) }
+            : undefined;
+
         return jsonResponse({
             success: false,
             error: isRateLimited ? `Rate limited. Retry in ${retryAfterSeconds}s` : errorMessage,
             isRetryable: isRateLimited,
             retryAfterSeconds: retryAfterSeconds
-        });
+        }, isRateLimited ? 429 : 500, retryHeaders);
     }
 }

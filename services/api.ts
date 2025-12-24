@@ -66,10 +66,11 @@ export const api = {
     // Processing & AI
     // compressedImageData: optional base64 string of compressed image to bypass R2 read
     processImage: async (jobId: string, model: string, systemPrompt: string, userPrompt: string, compressedImageData?: string): Promise<any> => {
+        const requestId = crypto.randomUUID();
         const res = await fetch(`${API_BASE}/process`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId, model, systemPrompt, userPrompt, compressedImageData })
+            body: JSON.stringify({ requestId, jobId, model, systemPrompt, userPrompt, compressedImageData })
         });
         return await res.json();
     },

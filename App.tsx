@@ -14,6 +14,8 @@ import { generateThumbnail, wait, calculateBackoff } from './utils';
 import { api } from './services/api';
 
 const MAX_CONCURRENT_JOBS = 1; // Serial processing to respect Free Tier rate limits
+// Even with 1 worker, a 2s gap is ~30 RPM and can exceed per-region RPM.
+const MIN_GEMINI_REQUEST_SPACING_MS = 12000; // ~5 RPM
 
 type AppView = 'workspace' | 'modules';
 type FilterType = 'all' | 'ready' | 'done' | 'failed';
@@ -43,6 +45,7 @@ export default function App() {
 
     const lastSelectedId = useRef<string | null>(null);
     const projectsRef = useRef(projects);
+    const nextGeminiAllowedAtRef = useRef<number>(0);
 
     useEffect(() => {
         projectsRef.current = projects;
@@ -283,6 +286,11 @@ export default function App() {
         const activeJobIds = new Set<string>();
 
         const processNext = async (workerId: number) => {
+            const now = Date.now();
+            if (now < nextGeminiAllowedAtRef.current) {
+                await wait(nextGeminiAllowedAtRef.current - now);
+            }
+
             const freshProject = projectsRef.current.find(p => p.id === currentProjectId);
             if (!freshProject) return;
             const job = freshProject.jobs.find(j => (j.status === 'queued' || j.status === 'retrying') && !activeJobIds.has(j.id));
@@ -292,6 +300,13 @@ export default function App() {
             updateJob(job.id, { status: 'processing', errorMsg: undefined });
 
             try {
+                // Enforce minimum spacing between Gemini requests to avoid RPM throttling.
+                // This is separate from per-job retry delays.
+                nextGeminiAllowedAtRef.current = Math.max(
+                    nextGeminiAllowedAtRef.current,
+                    Date.now() + MIN_GEMINI_REQUEST_SPACING_MS
+                );
+
                 // Pass file or URL - compression will always happen client-side
                 // This is CRITICAL to avoid hitting Gemini TPM limits with large images
                 const imageSource = job.file || job.thumbnailUrl || job.originalUrl;
@@ -311,6 +326,12 @@ export default function App() {
                         const delay = result.retryAfterSeconds
                             ? result.retryAfterSeconds * 1000
                             : calculateBackoff(job.retryCount);
+
+                        nextGeminiAllowedAtRef.current = Math.max(
+                            nextGeminiAllowedAtRef.current,
+                            Date.now() + delay
+                        );
+
                         updateJob(job.id, {
                             status: 'retrying',
                             errorMsg: `Rate limited. Waiting ${Math.round(delay / 1000)}s...`,
@@ -327,8 +348,6 @@ export default function App() {
                 updateJob(job.id, { status: 'error', errorMsg: 'Unexpected error' });
             }
 
-            // Artificial delay to respect RPM limits (Free Tier)
-            await wait(2000);
             await processNext(workerId);
         };
 

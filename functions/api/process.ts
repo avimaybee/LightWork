@@ -2,11 +2,35 @@
 import { GoogleGenAI } from "@google/genai";
 
 // Helper for consistent JSON responses with proper headers
-function jsonResponse(data: any, status: number = 200) {
+function jsonResponse(data: any, status: number = 200, extraHeaders?: Record<string, string>) {
     return new Response(JSON.stringify(data), {
         status,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', ...(extraHeaders || {}) }
     });
+}
+
+function parseRetryDelaySeconds(errorMessage: string, retryAfterHeader?: string | null): number | undefined {
+    // Header wins if present
+    if (retryAfterHeader) {
+        const headerSeconds = Number.parseInt(retryAfterHeader, 10);
+        if (Number.isFinite(headerSeconds)) return headerSeconds;
+    }
+
+    // Common format from Google APIs: retryDelay: "20s" (may be quoted)
+    const retryDelayMatch = errorMessage.match(/retryDelay[^0-9]*"?(\d+)s"?/i);
+    if (retryDelayMatch) {
+        const seconds = Number.parseInt(retryDelayMatch[1], 10);
+        return Number.isFinite(seconds) ? seconds : undefined;
+    }
+
+    // Some stacks include Retry-After style hints
+    const retryAfterMatch = errorMessage.match(/retry[- ]after[^0-9]*(\d+)/i);
+    if (retryAfterMatch) {
+        const seconds = Number.parseInt(retryAfterMatch[1], 10);
+        return Number.isFinite(seconds) ? seconds : undefined;
+    }
+
+    return undefined;
 }
 
 // Helper function to convert ArrayBuffer to base64 without stack overflow
@@ -23,13 +47,19 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 export async function onRequestPost(context) {
     let jobId: string | null = null;
+    let requestId: string | null = null;
 
     try {
         const body = await context.request.json();
+        requestId = body.requestId || null;
         jobId = body.jobId;
         const { model, systemPrompt, userPrompt, compressedImageData } = body;
 
-        console.log("[Process API] Starting job:", jobId, "Model:", model);
+        const cfRay = context.request.headers.get('cf-ray');
+        const cfColo = context.request.headers.get('cf-connecting-ip')
+            ? context.request.cf?.colo
+            : context.request.cf?.colo;
+        console.log("[Process API] Starting job:", { requestId, jobId, model, cfRay, cfColo });
 
         // 1. Get Image Info from DB (still needed for result storage)
         const imageRecord = await context.env.DB.prepare("SELECT * FROM images WHERE id = ?").bind(jobId).first();
@@ -74,6 +104,15 @@ export async function onRequestPost(context) {
 
         console.log("[Process API] Base64 length for AI:", b64Data.length);
 
+        // Guardrail: avoid oversized inline payloads (> ~18MB raw bytes) to stay under 20MB request cap and cost surprises
+        const approximateBytes = Math.floor(b64Data.length * 0.75);
+        if (approximateBytes > 18 * 1024 * 1024) {
+            return jsonResponse({
+                success: false,
+                error: "Image too large to send inline. Please compress further or retry after resizing."
+            }, 413);
+        }
+
         // 3. Initialize Gemini AI
         const ai = new GoogleGenAI({ apiKey: context.env.GEMINI_API_KEY });
 
@@ -87,8 +126,9 @@ export async function onRequestPost(context) {
 
         // 4. Call Gemini API with correct structure as per Research PDF
         console.log("[Process API] Calling Gemini API...");
-        const response = await ai.models.generateContent({
-            model: modelName,
+        const requestPayload = {
+            // The SDK accepts bare model names, but prefixing avoids regional aliasing edge cases
+            model: modelName.startsWith('models/') ? modelName : `models/${modelName}`,
             contents: [{
                 role: 'user',
                 parts: [
@@ -101,13 +141,23 @@ export async function onRequestPost(context) {
                     }
                 ]
             }],
+            // As of 2025-12 docs, response_modalities sits inside GenerateContentConfig for image models
             config: {
-                responseModalities: ['IMAGE'], // Request image output explicitly
-                temperature: 0.4 // Lower temperature for stability
+                responseModalities: ['IMAGE']
+            },
+            generationConfig: {
+                temperature: 1
             }
-        });
+        };
+
+        console.log("[Process API] Gemini request payload", { model: requestPayload.model, responseModalities: requestPayload.config.responseModalities });
+
+        const response = await ai.models.generateContent(requestPayload);
 
         console.log("[Process API] Gemini response received");
+        if (response?.usage) {
+            console.log("[Process API] Usage:", response.usage);
+        }
 
         // 5. Extract generated image from response candidates
         const parts = response.candidates?.[0]?.content?.parts || [];
@@ -148,11 +198,13 @@ export async function onRequestPost(context) {
 
         // Return bytes to frontend for immediate display
         console.log("[Process API] Job completed successfully");
-        return jsonResponse({ success: true, imageBytes });
+        return jsonResponse({ success: true, imageBytes, requestId });
 
     } catch (e) {
-        const errorMessage = e.message || 'Unknown error';
+        const errorMessage = e?.message || 'Unknown error';
         console.error("[Process API] Error:", errorMessage);
+
+        const retryAfterHeader = e?.response?.headers?.get?.('Retry-After') ?? null;
 
         // Parse retry delay from Google's rate limit error
         let retryAfterSeconds = 0;
@@ -161,13 +213,7 @@ export async function onRequestPost(context) {
         // Check if it's a rate limit error (429)
         if (errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('retryDelay')) {
             isRateLimited = true;
-            // Try to extract retry delay from error message
-            const retryMatch = errorMessage.match(/retryDelay[":]+\s*(\d+)s/i);
-            if (retryMatch) {
-                retryAfterSeconds = parseInt(retryMatch[1], 10);
-            } else {
-                retryAfterSeconds = 30; // Default to 30 seconds
-            }
+            retryAfterSeconds = parseRetryDelaySeconds(errorMessage, retryAfterHeader) ?? 30;
             console.log("[Process API] Rate limited, retry after:", retryAfterSeconds, "seconds");
         }
 
@@ -184,11 +230,16 @@ export async function onRequestPost(context) {
             console.error("[Process API] Failed to update DB:", dbError);
         }
 
+        const retryHeaders = isRateLimited && retryAfterSeconds > 0
+            ? { 'Retry-After': String(retryAfterSeconds) }
+            : undefined;
+
         return jsonResponse({
             success: false,
             error: errorMessage.substring(0, 500),
             isRetryable: isRateLimited,
-            retryAfterSeconds: retryAfterSeconds
-        }, isRateLimited ? 429 : 500);
+            retryAfterSeconds: retryAfterSeconds,
+            requestId
+        }, isRateLimited ? 429 : 500, retryHeaders);
     }
 }
