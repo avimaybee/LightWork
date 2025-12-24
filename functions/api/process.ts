@@ -1,6 +1,14 @@
 
 import { GoogleGenAI } from "@google/genai";
 
+// Helper for consistent JSON responses with proper headers
+function jsonResponse(data: any, status: number = 200) {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: { 'Content-Type': 'application/json' }
+    });
+}
+
 // Helper function to convert ArrayBuffer to base64 without stack overflow
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
@@ -27,7 +35,7 @@ export async function onRequestPost(context) {
         const imageRecord = await context.env.DB.prepare("SELECT * FROM images WHERE id = ?").bind(jobId).first();
         if (!imageRecord) {
             console.log("[Process API] Image not found in DB:", jobId);
-            return new Response(JSON.stringify({ success: false, error: "Image not found in database" }), { status: 404 });
+            return jsonResponse({ success: false, error: "Image not found in database" }, 404);
         }
         console.log("[Process API] Found image record:", imageRecord.r2_key_original);
 
@@ -45,12 +53,12 @@ export async function onRequestPost(context) {
             const obj = await context.env.STORAGE.get(imageRecord.r2_key_original);
             if (!obj) {
                 console.log("[Process API] Source image missing in R2");
-                return new Response(JSON.stringify({ success: false, error: "Source image missing in storage" }), { status: 404 });
+                return jsonResponse({ success: false, error: "Source image missing in storage" }, 404);
             }
 
             const arrayBuffer = await obj.arrayBuffer();
             console.log("[Process API] Image loaded from R2, size:", arrayBuffer.byteLength);
-            
+
             if (obj.httpMetadata && obj.httpMetadata.contentType) {
                 mimeType = obj.httpMetadata.contentType;
             } else {
@@ -69,7 +77,7 @@ export async function onRequestPost(context) {
         // 3. Initialize Gemini AI
         const ai = new GoogleGenAI({ apiKey: context.env.GEMINI_API_KEY });
 
-        // Determine model - default to gemini-2.5-flash-image
+        // Determine model - use gemini-2.5-flash-image for image editing
         const modelName = model || 'gemini-2.5-flash-image';
         console.log("[Process API] Using model:", modelName);
 
@@ -77,45 +85,55 @@ export async function onRequestPost(context) {
         const fullPrompt = `${systemPrompt}\n\n${userPrompt || ''}`.trim();
         console.log("[Process API] Prompt length:", fullPrompt.length);
 
-        // 4. Call Gemini API - using generateContent for image editing
-        // Per official docs: https://ai.google.dev/gemini-api/docs/image-generation
+        // 4. Call Gemini API with responseModalities for image generation
         const response = await ai.models.generateContent({
             model: modelName,
-            contents: [
-                { text: fullPrompt },
-                {
-                    inlineData: {
-                        mimeType: mimeType,
-                        data: b64Data
+            contents: {
+                parts: [
+                    { text: fullPrompt },
+                    {
+                        inlineData: {
+                            mimeType: mimeType,
+                            data: b64Data
+                        }
                     }
-                }
-            ]
+                ]
+            },
+            config: {
+                responseModalities: ['image', 'text']
+            }
         });
+
+
 
         console.log("[Process API] Gemini response received");
 
         // 5. Extract generated image from response.candidates[0].content.parts
         let imageBytes = null;
+        let textResponse = null;
 
         if (response.candidates?.[0]?.content?.parts) {
             for (const part of response.candidates[0].content.parts) {
                 if (part.inlineData && part.inlineData.data) {
                     imageBytes = part.inlineData.data;
-                    console.log("[Process API] Found image in response");
+                    console.log("[Process API] Found image in response, length:", imageBytes.length);
                     break;
                 }
                 if (part.text) {
+                    textResponse = part.text;
                     console.log("[Process API] Text response:", part.text.substring(0, 200));
                 }
             }
         }
 
         if (!imageBytes) {
-            // Check if there was a text refusal or error message
-            const textPart = response.candidates?.[0]?.content?.parts?.find(p => p.text);
-            const errorMsg = textPart ? textPart.text : "Model returned no image data";
-            console.error("[Process API] No image in response:", errorMsg.substring(0, 500));
-            throw new Error(errorMsg.substring(0, 200)); // Truncate for cleaner error
+            // Log full response for debugging
+            console.error("[Process API] Full response structure:", JSON.stringify(response.candidates?.[0]?.content).substring(0, 1000));
+            const errorMsg = textResponse
+                ? `Model returned text instead of image: ${textResponse.substring(0, 150)}`
+                : "Model returned no image data - check if prompt is compatible with image editing";
+            console.error("[Process API] No image in response:", errorMsg);
+            throw new Error(errorMsg);
         }
 
         // 6. Save Result to R2
@@ -138,7 +156,7 @@ export async function onRequestPost(context) {
 
         // Return bytes to frontend for immediate display
         console.log("[Process API] Job completed successfully");
-        return new Response(JSON.stringify({ success: true, imageBytes }));
+        return jsonResponse({ success: true, imageBytes });
 
     } catch (e) {
         const errorMessage = e.message || 'Unknown error';
@@ -174,12 +192,11 @@ export async function onRequestPost(context) {
             console.error("[Process API] Failed to update DB:", dbError);
         }
 
-        return new Response(JSON.stringify({
+        return jsonResponse({
             success: false,
             error: errorMessage.substring(0, 500),
             isRetryable: isRateLimited,
             retryAfterSeconds: retryAfterSeconds
-        }));
+        }, isRateLimited ? 429 : 500);
     }
 }
-

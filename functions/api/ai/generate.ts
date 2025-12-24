@@ -35,16 +35,16 @@ export async function onRequestPost(context) {
         const ai = new GoogleGenAI({ apiKey: context.env.GEMINI_API_KEY });
 
         // Use lighter models for analysis tasks (higher rate limits)
-        const modelName = 'gemini-2.5-flash-lite';
+        const modelName = 'gemini-flash-latest';
 
         let prompt = "";
-        let contents = [];
+        let contents: any = null;
 
         if (type === 'enhance') {
             // Text-only task - no image needed
             if (!text) return jsonResponse({ success: false, error: "Missing text" }, 400);
             prompt = `Refine the following image editing instruction to be more technical, precise, and effective for an AI image generator. Keep it concise. Only output the refined instruction, nothing else. Input: "${text}"`;
-            contents = [{ text: prompt }];
+            contents = { parts: [{ text: prompt }] };
         }
         else if (type === 'rename' || type === 'describe') {
             // Vision tasks - require image data
@@ -62,15 +62,17 @@ export async function onRequestPost(context) {
             }
 
             // Use client-provided compressed image (avoids R2 read + OOM)
-            contents = [
-                { text: prompt },
-                {
-                    inlineData: {
-                        mimeType: 'image/jpeg',
-                        data: compressedImageData
+            contents = {
+                parts: [
+                    { text: prompt },
+                    {
+                        inlineData: {
+                            mimeType: 'image/jpeg',
+                            data: compressedImageData
+                        }
                     }
-                }
-            ];
+                ]
+            };
         } else {
             return jsonResponse({ success: false, error: "Invalid type" }, 400);
         }
