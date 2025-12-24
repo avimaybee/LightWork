@@ -21,7 +21,7 @@ export async function onRequestPost(context) {
         const b64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
         // 3. Call Gemini
-        const ai = new GoogleGenAI({ apiKey: context.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: context.env.GEMINI_API_KEY });
         
         // Configure Request
         const isPro = model === 'gemini-3-pro-image-preview';
