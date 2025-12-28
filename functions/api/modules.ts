@@ -1,31 +1,71 @@
 
-export async function onRequestGet(context) {
+import { getAuthContext } from '../lib/auth';
+
+export async function onRequestGet(context: any) {
     try {
-        const { results } = await context.env.DB.prepare("SELECT * FROM modules").all();
+        const auth = await getAuthContext(context.request);
+
+        // Fetch user's custom modules (or all if no auth for public modules)
+        let query = "SELECT * FROM modules";
+        let params: string[] = [];
+
+        if (auth.userId) {
+            // Get modules for this user OR system modules (null user_id)
+            query = "SELECT * FROM modules WHERE user_id = ? OR user_id IS NULL";
+            params = [auth.userId];
+        } else {
+            // Only system modules for unauthenticated users
+            query = "SELECT * FROM modules WHERE user_id IS NULL";
+        }
+
+        const stmt = params.length > 0
+            ? context.env.DB.prepare(query).bind(...params)
+            : context.env.DB.prepare(query);
+
+        const { results } = await stmt.all();
+
         // Map to frontend structure
-        const modules = results.map(m => ({
+        const modules = results.map((m: any) => ({
             id: m.id,
             name: m.name,
             prompt: m.prompt,
-            isCustom: true // DB modules are custom or stored system ones.
+            isCustom: m.user_id !== null
         }));
-        return new Response(JSON.stringify(modules));
+        return new Response(JSON.stringify(modules), {
+            headers: { 'Content-Type': 'application/json' }
+        });
     } catch (e) {
-        return new Response("[]"); // Fail gracefully to empty array
+        return new Response("[]", {
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 }
 
-export async function onRequestPost(context) {
+export async function onRequestPost(context: any) {
     try {
+        const auth = await getAuthContext(context.request);
+
+        if (!auth.userId) {
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
         const { name, prompt } = await context.request.json();
         const id = crypto.randomUUID();
-        
-        await context.env.DB.prepare(
-            "INSERT INTO modules (id, name, prompt, category) VALUES (?, ?, ?, ?)"
-        ).bind(id, name, prompt, 'custom').run();
 
-        return new Response(JSON.stringify({ id, name, prompt, isCustom: true }));
-    } catch (e) {
-        return new Response(e.message, { status: 500 });
+        await context.env.DB.prepare(
+            "INSERT INTO modules (id, user_id, name, prompt, category) VALUES (?, ?, ?, ?, ?)"
+        ).bind(id, auth.userId, name, prompt, 'custom').run();
+
+        return new Response(JSON.stringify({ id, name, prompt, isCustom: true }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
+    } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 }

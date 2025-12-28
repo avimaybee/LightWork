@@ -7,8 +7,10 @@ import { Lightbox } from './components/Lightbox';
 import { Onboarding } from './components/Onboarding';
 import { ModulesManager } from './components/ModulesManager';
 import { ToastContainer, ToastMsg } from './components/Toast';
+import { AuthModal } from './components/AuthModal';
+import { AuthProvider, useAuth } from './services/authContext';
 import { Project, ImageJob, ProcessingStatus, DEFAULT_MODULES, Module, AppModel } from './types';
-import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock, Loader2 } from 'lucide-react';
 import { processImageWithGemini } from './services/geminiService';
 import { generateThumbnail, wait, calculateBackoff } from './utils';
 import { api } from './services/api';
@@ -20,7 +22,8 @@ const MIN_GEMINI_REQUEST_SPACING_MS = 12000; // ~5 RPM
 type AppView = 'workspace' | 'modules';
 type FilterType = 'all' | 'ready' | 'done' | 'failed';
 
-export default function App() {
+// Main App Content (protected by auth)
+function AppContent() {
     // --- State ---
     const [currentView, setCurrentView] = useState<AppView>('workspace');
 
@@ -485,4 +488,41 @@ export default function App() {
             )}
         </div>
     );
+}
+
+// Main App with Auth Provider
+export default function App() {
+    return (
+        <AuthProvider>
+            <AuthenticatedApp />
+        </AuthProvider>
+    );
+}
+
+// Wrapper to handle auth state
+function AuthenticatedApp() {
+    const { user, loading } = useAuth();
+
+    // Loading state
+    if (loading) {
+        return (
+            <div className="h-screen flex flex-col items-center justify-center bg-[#F2F0E9] gap-4">
+                <div className="w-12 h-12 bg-stone-900 rounded-xl flex items-center justify-center shadow-lg animate-pulse">
+                    <Command className="w-6 h-6 text-[#FDFCFB]" />
+                </div>
+                <div className="flex items-center gap-2 text-stone-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm font-sans">Loading...</span>
+                </div>
+            </div>
+        );
+    }
+
+    // Show auth modal if not logged in
+    if (!user) {
+        return <AuthModal isOpen={true} />;
+    }
+
+    // Show main app content
+    return <AppContent />;
 }

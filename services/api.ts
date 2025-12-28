@@ -1,13 +1,57 @@
 
 import { Project, ImageJob, Module } from "../types";
+import { auth } from "./firebase";
 
 const API_BASE = '/api';
 
+// Get auth token for API requests
+async function getAuthHeaders(): Promise<HeadersInit> {
+    const user = auth.currentUser;
+    if (!user) return {};
+
+    try {
+        const token = await user.getIdToken();
+        return { 'Authorization': `Bearer ${token}` };
+    } catch (e) {
+        console.error('Failed to get auth token', e);
+        return {};
+    }
+}
+
 export const api = {
+    // Sync user to D1 database after Firebase login
+    syncUser: async (): Promise<boolean> => {
+        const user = auth.currentUser;
+        if (!user) return false;
+
+        try {
+            const token = await user.getIdToken();
+            const res = await fetch(`${API_BASE}/auth/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    email: user.email,
+                    displayName: user.displayName,
+                    photoURL: user.photoURL
+                })
+            });
+            return res.ok;
+        } catch (e) {
+            console.error('Failed to sync user', e);
+            return false;
+        }
+    },
+
     // Projects (Jobs)
     getProjects: async (): Promise<Project[]> => {
         try {
-            const res = await fetch(`${API_BASE}/projects`);
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/projects`, {
+                headers: authHeaders
+            });
             if (!res.ok) return [];
             return await res.json();
         } catch (e) {
@@ -18,9 +62,13 @@ export const api = {
 
     createProject: async (name: string): Promise<Project | null> => {
         try {
+            const authHeaders = await getAuthHeaders();
             const res = await fetch(`${API_BASE}/projects`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
                 body: JSON.stringify({ name })
             });
             if (!res.ok) throw new Error('Failed to create project');
@@ -32,26 +80,36 @@ export const api = {
     },
 
     updateProject: async (id: string, updates: Partial<Project>) => {
+        const authHeaders = await getAuthHeaders();
         await fetch(`${API_BASE}/projects/${id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...authHeaders
+            },
             body: JSON.stringify(updates)
         });
     },
 
     deleteProject: async (id: string) => {
-        await fetch(`${API_BASE}/projects/${id}`, { method: 'DELETE' });
+        const authHeaders = await getAuthHeaders();
+        await fetch(`${API_BASE}/projects/${id}`, {
+            method: 'DELETE',
+            headers: authHeaders
+        });
     },
 
     // Images
     uploadImage: async (projectId: string, file: File): Promise<ImageJob | null> => {
         try {
+            const authHeaders = await getAuthHeaders();
             const formData = new FormData();
             formData.append('file', file);
             formData.append('projectId', projectId);
 
             const res = await fetch(`${API_BASE}/images/upload`, {
                 method: 'POST',
+                headers: authHeaders,
                 body: formData
             });
 
@@ -64,23 +122,30 @@ export const api = {
     },
 
     // Processing & AI
-    // compressedImageData: optional base64 string of compressed image to bypass R2 read
     processImage: async (jobId: string, model: string, systemPrompt: string, userPrompt: string, compressedImageData?: string): Promise<any> => {
+        const authHeaders = await getAuthHeaders();
         const requestId = crypto.randomUUID();
         const res = await fetch(`${API_BASE}/process`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...authHeaders
+            },
             body: JSON.stringify({ requestId, jobId, model, systemPrompt, userPrompt, compressedImageData })
         });
         return await res.json();
     },
 
-    // AI Generation - for rename/describe, compressedImageData must be provided
+    // AI Generation
     generateAI: async (type: 'enhance' | 'rename' | 'describe', payload: { jobId?: string, text?: string, compressedImageData?: string }): Promise<{ success: boolean, result?: string, error?: string, isRetryable?: boolean, retryAfterSeconds?: number }> => {
         try {
+            const authHeaders = await getAuthHeaders();
             const res = await fetch(`${API_BASE}/ai/generate`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
                 body: JSON.stringify({ type, ...payload })
             });
             const data = await res.json();
@@ -94,7 +159,10 @@ export const api = {
     // Modules
     getModules: async (): Promise<Module[]> => {
         try {
-            const res = await fetch(`${API_BASE}/modules`);
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/modules`, {
+                headers: authHeaders
+            });
             if (!res.ok) throw new Error("Failed to fetch modules");
             return await res.json();
         } catch (e) {
@@ -105,9 +173,13 @@ export const api = {
 
     createModule: async (name: string, prompt: string): Promise<Module | null> => {
         try {
+            const authHeaders = await getAuthHeaders();
             const res = await fetch(`${API_BASE}/modules`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
                 body: JSON.stringify({ name, prompt })
             });
             if (!res.ok) throw new Error("Failed to create module");
@@ -119,6 +191,10 @@ export const api = {
     },
 
     deleteModule: async (id: string) => {
-        await fetch(`${API_BASE}/modules/${id}`, { method: 'DELETE' });
+        const authHeaders = await getAuthHeaders();
+        await fetch(`${API_BASE}/modules/${id}`, {
+            method: 'DELETE',
+            headers: authHeaders
+        });
     }
 };
