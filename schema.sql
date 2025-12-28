@@ -49,3 +49,38 @@ CREATE TABLE IF NOT EXISTS modules (
 -- Indexes for query performance
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_modules_user_id ON modules(user_id);
+
+-- Batch Jobs table (for Gemini Batch API)
+CREATE TABLE IF NOT EXISTS batch_jobs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id),
+    project_id TEXT REFERENCES jobs(id),
+    gemini_batch_name TEXT,
+    status TEXT DEFAULT 'pending',
+    model TEXT,
+    display_name TEXT,
+    request_count INTEGER DEFAULT 0,
+    completed_count INTEGER DEFAULT 0,
+    failed_count INTEGER DEFAULT 0,
+    retry_count INTEGER DEFAULT 0,
+    last_polled_at INTEGER,
+    created_at INTEGER,
+    submitted_at INTEGER,
+    completed_at INTEGER
+);
+
+-- Batch Items table (individual images in a batch)
+CREATE TABLE IF NOT EXISTS batch_items (
+    id TEXT PRIMARY KEY,
+    batch_id TEXT REFERENCES batch_jobs(id),
+    image_id TEXT REFERENCES images(id),
+    request_key TEXT UNIQUE,
+    status TEXT DEFAULT 'pending',
+    result_data TEXT,
+    error_msg TEXT,
+    created_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_batch_jobs_user ON batch_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_batch_jobs_status ON batch_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_batch_items_batch ON batch_items(batch_id);

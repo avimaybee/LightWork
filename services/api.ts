@@ -196,5 +196,68 @@ export const api = {
             method: 'DELETE',
             headers: authHeaders
         });
+    },
+
+    // Batch API
+    createBatch: async (projectId: string, model: string): Promise<{ success: boolean; batchId?: string; itemCount?: number; error?: string }> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/batch/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify({ projectId, model })
+            });
+            const data = await res.json();
+            if (!res.ok) return { success: false, error: data.error };
+            return { success: true, batchId: data.batchId, itemCount: data.itemCount };
+        } catch (e: any) {
+            return { success: false, error: e.message };
+        }
+    },
+
+    submitBatch: async (batchId: string): Promise<{ success: boolean; geminiBatchName?: string; error?: string }> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/batch/${batchId}/submit`, {
+                method: 'POST',
+                headers: authHeaders
+            });
+            const data = await res.json();
+            if (!res.ok) return { success: false, error: data.error };
+            return { success: true, geminiBatchName: data.geminiBatchName };
+        } catch (e: any) {
+            return { success: false, error: e.message };
+        }
+    },
+
+    getBatchStatus: async (batchId: string): Promise<any> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/batch/${batchId}`, {
+                headers: authHeaders
+            });
+            return await res.json();
+        } catch (e) {
+            console.error('Failed to get batch status', e);
+            return null;
+        }
+    },
+
+    getActiveBatches: async (): Promise<any[]> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/batch/active`, {
+                headers: authHeaders
+            });
+            const data = await res.json();
+            return data.batches || [];
+        } catch (e) {
+            console.error('Failed to get active batches', e);
+            return [];
+        }
     }
 };
+

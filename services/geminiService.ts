@@ -13,13 +13,41 @@ interface GeminiResponse {
 }
 
 // Helper to get compressed image data from file OR url
-async function getCompressedImageData(fileOrUrl: File | Blob | string | undefined, maxSize: number = 1536): Promise<string | undefined> {
+// Uses model-aware compression: 1024px for Fast, no compression for Pro
+async function getCompressedImageData(
+  fileOrUrl: File | Blob | string | undefined,
+  modelName: AppModel
+): Promise<string | undefined> {
   if (!fileOrUrl) return undefined;
 
-  let blob: Blob;
+  // PRO model: no compression for best quality
+  if (modelName === AppModel.PRO) {
+    console.log("[GeminiService] Pro model - skipping compression for full quality");
 
+    let blob: Blob;
+    if (typeof fileOrUrl === 'string') {
+      const response = await fetch(fileOrUrl);
+      if (!response.ok) throw new Error("Failed to fetch image");
+      blob = await response.blob();
+    } else {
+      blob = fileOrUrl;
+    }
+
+    // Convert blob to base64 without compression
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, chunk as any);
+    }
+    return btoa(binary);
+  }
+
+  // FAST model: compress to 1024px for token savings
+  let blob: Blob;
   if (typeof fileOrUrl === 'string') {
-    // It's a URL - fetch the image
     console.log("[GeminiService] Fetching image from URL for compression...");
     const response = await fetch(fileOrUrl);
     if (!response.ok) throw new Error("Failed to fetch image");
@@ -28,7 +56,7 @@ async function getCompressedImageData(fileOrUrl: File | Blob | string | undefine
     blob = fileOrUrl;
   }
 
-  return await compressImageForAI(blob, maxSize);
+  return await compressImageForAI(blob, 1024); // 1024px for Fast model
 }
 
 export const processImageWithGemini = async (
@@ -41,23 +69,24 @@ export const processImageWithGemini = async (
   try {
     if (!jobId) throw new Error("Job ID required for backend processing");
 
-    // Compress image client-side to reduce token consumption
-    // This is CRITICAL to avoid hitting TPM limits
+    // Compress image client-side based on model
+    // Fast: 1024px compression, Pro: no compression
     let compressedImageData: string | undefined;
 
     try {
-      console.log("[GeminiService] Compressing image for AI processing...");
-      compressedImageData = await getCompressedImageData(fileOrUrl, 1536);
+      console.log(`[GeminiService] Preparing image for ${modelName}...`);
+      compressedImageData = await getCompressedImageData(fileOrUrl, modelName);
       if (compressedImageData) {
-        console.log("[GeminiService] Image compressed successfully, length:", compressedImageData.length);
+        console.log("[GeminiService] Image prepared, length:", compressedImageData.length);
       } else {
-        console.warn("[GeminiService] No file/URL provided, will use R2 fallback (may hit TPM limits!)");
+        console.warn("[GeminiService] No file/URL provided, will use R2 fallback");
       }
     } catch (e) {
-      console.warn("[GeminiService] Compression failed, will use R2 fallback", e);
+      console.warn("[GeminiService] Image prep failed, will use R2 fallback", e);
     }
 
     const result = await api.processImage(jobId, modelName, systemContext, userPrompt, compressedImageData);
+
 
     if (result.success && result.imageBytes) {
       return { success: true, imageBytes: result.imageBytes };
@@ -94,11 +123,11 @@ interface AIResponse {
   retryAfterSeconds?: number;
 }
 
-// Smart Rename - accepts file/blob or URL string
+// Smart Rename - accepts file/blob or URL string (always uses 1024px compression)
 export const generateSmartFilename = async (fileOrUrl: File | Blob | string): Promise<AIResponse> => {
   try {
     console.log("[GeminiService] Smart Rename starting...");
-    const compressedImageData = await getCompressedImageData(fileOrUrl, 1024);
+    const compressedImageData = await compressForUtility(fileOrUrl);
     if (!compressedImageData) {
       return { success: false, error: "No image data to process" };
     }
@@ -110,16 +139,30 @@ export const generateSmartFilename = async (fileOrUrl: File | Blob | string): Pr
   }
 };
 
+// Helper for utility functions - always compresses to 1024px
+async function compressForUtility(fileOrUrl: File | Blob | string): Promise<string | undefined> {
+  let blob: Blob;
+  if (typeof fileOrUrl === 'string') {
+    const response = await fetch(fileOrUrl);
+    if (!response.ok) throw new Error("Failed to fetch image");
+    blob = await response.blob();
+  } else {
+    blob = fileOrUrl;
+  }
+  return await compressImageForAI(blob, 1024);
+}
+
+
 // Enhance Prompt - text only, no image needed
 export const enhancePrompt = async (originalPrompt: string): Promise<AIResponse> => {
   return await api.generateAI('enhance', { text: originalPrompt });
 };
 
-// Auto Draft / Describe - accepts file/blob or URL string
+// Auto Draft / Describe - accepts file/blob or URL string (always uses 1024px compression)
 export const generateImageDescription = async (fileOrUrl: File | Blob | string): Promise<AIResponse> => {
   try {
     console.log("[GeminiService] Auto Draft starting...");
-    const compressedImageData = await getCompressedImageData(fileOrUrl, 1024);
+    const compressedImageData = await compressForUtility(fileOrUrl);
     if (!compressedImageData) {
       return { success: false, error: "No image data to process" };
     }

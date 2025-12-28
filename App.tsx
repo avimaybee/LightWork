@@ -8,8 +8,10 @@ import { Onboarding } from './components/Onboarding';
 import { ModulesManager } from './components/ModulesManager';
 import { ToastContainer, ToastMsg } from './components/Toast';
 import { AuthModal } from './components/AuthModal';
+import { BatchStatusPanel } from './components/BatchStatusPanel';
 import { AuthProvider, useAuth } from './services/authContext';
-import { Project, ImageJob, ProcessingStatus, DEFAULT_MODULES, Module, AppModel } from './types';
+import { Project, ImageJob, ProcessingStatus, DEFAULT_MODULES, Module, AppModel, ApiMode } from './types';
+
 import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock, Loader2 } from 'lucide-react';
 import { processImageWithGemini } from './services/geminiService';
 import { generateThumbnail, wait, calculateBackoff } from './utils';
@@ -41,6 +43,7 @@ function AppContent() {
     const [toasts, setToasts] = useState<ToastMsg[]>([]);
     const [gridColumns, setGridColumns] = useState(3);
     const [filter, setFilter] = useState<FilterType>('all');
+    const [apiMode, setApiMode] = useState<ApiMode>('fast');
 
     const [isHeaderEditing, setIsHeaderEditing] = useState(false);
     const [headerTempName, setHeaderTempName] = useState('');
@@ -461,12 +464,36 @@ function AppContent() {
                             modules={modules}
                             isProcessing={isProcessing}
                             queuedCount={(currentProject.jobs || []).filter(j => j.status === 'queued' || j.status === 'error' || j.status === 'paused').length}
+                            apiMode={apiMode}
+                            onApiModeChange={setApiMode}
                             onUpdateProject={updateCurrentProject}
                             onProcess={processQueue}
+                            onProcessBatch={async () => {
+                                const model = currentProject.selectedMode === 'pro' ? AppModel.PRO : AppModel.FAST;
+                                addToast('info', 'Creating batch job...');
+                                const createResult = await api.createBatch(currentProjectId, model);
+                                if (!createResult.success) {
+                                    addToast('error', createResult.error || 'Failed to create batch');
+                                    return;
+                                }
+                                addToast('success', `Batch created with ${createResult.itemCount} images`);
+                                const submitResult = await api.submitBatch(createResult.batchId!);
+                                if (!submitResult.success) {
+                                    addToast('error', submitResult.error || 'Failed to submit batch');
+                                    return;
+                                }
+                                addToast('success', 'Batch submitted! Check status panel for progress.');
+                            }}
                             onCreateModule={handleCreateModule}
                             onDeleteModule={handleDeleteModule}
                             onManageModules={() => setCurrentView('modules')}
                         />
+
+                        <BatchStatusPanel onBatchComplete={(batchId) => {
+                            addToast('success', 'Batch processing complete!');
+                            // Refresh project data to show results
+                            api.getProjects().then(projects => setProjects(projects));
+                        }} />
                     </main>
 
                     {selectedJobs.length > 0 && (

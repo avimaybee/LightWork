@@ -21,6 +21,8 @@ export const ImageCard: React.FC<ImageCardProps> = ({
 
   const getStatusIndicator = () => {
       switch(job.status) {
+        case 'batch_pending': return <FileQuestion className="w-3.5 h-3.5 text-amber-500" />;
+        case 'batch_processing': return <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />;
           case 'processing': return <Loader2 className="w-3.5 h-3.5 text-stone-500 animate-spin" />;
           case 'retrying': return <Loader2 className="w-3.5 h-3.5 text-clay-500 animate-spin" />;
           case 'uploading': return <div className="w-1.5 h-1.5 rounded-full bg-stone-300" />;
@@ -98,7 +100,7 @@ export const ImageCard: React.FC<ImageCardProps> = ({
       </div>
 
       {/* Loading Overlay */}
-      {job.status === 'processing' && (
+        {(job.status === 'processing' || job.status === 'batch_processing') && (
           <div className="absolute inset-2 z-10 bg-white/20 backdrop-blur-[1px]">
              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/40 to-transparent animate-shimmer" />
           </div>

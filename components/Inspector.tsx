@@ -130,7 +130,8 @@ export const Inspector: React.FC<InspectorProps> = ({
                                 <div className="flex items-center gap-2">
                                     <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${job.status === 'completed' ? 'bg-green-100 text-green-700' :
                                         job.status === 'error' ? 'bg-red-100 text-red-700' :
-                                            job.status === 'processing' ? 'bg-amber-100 text-amber-700' :
+                                            (job.status === 'processing' || job.status === 'batch_processing') ? 'bg-amber-100 text-amber-700' :
+                                                job.status === 'batch_pending' ? 'bg-stone-100 text-stone-600' :
                                                 'bg-stone-100 text-stone-500'
                                         }`}>
                                         {job.status}

@@ -1,5 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { getAuthContext } from '../lib/auth';
 
 // Helper for consistent JSON responses with proper headers
 function jsonResponse(data: any, status: number = 200, extraHeaders?: Record<string, string>) {
@@ -50,6 +51,11 @@ export async function onRequestPost(context) {
     let requestId: string | null = null;
 
     try {
+        const auth = await getAuthContext(context.request);
+        if (!auth.userId) {
+            return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
+        }
+
         const body = await context.request.json();
         requestId = body.requestId || null;
         jobId = body.jobId;
@@ -61,8 +67,13 @@ export async function onRequestPost(context) {
             : context.request.cf?.colo;
         console.log("[Process API] Starting job:", { requestId, jobId, model, cfRay, cfColo });
 
-        // 1. Get Image Info from DB (still needed for result storage)
-        const imageRecord = await context.env.DB.prepare("SELECT * FROM images WHERE id = ?").bind(jobId).first();
+        // 1. Get Image Info from DB + enforce ownership
+        const imageRecord = await context.env.DB.prepare(
+            `SELECT i.*
+             FROM images i
+             JOIN jobs j ON i.job_id = j.id
+             WHERE i.id = ? AND j.user_id = ?`
+        ).bind(jobId, auth.userId).first();
         if (!imageRecord) {
             console.log("[Process API] Image not found in DB:", jobId);
             return jsonResponse({ success: false, error: "Image not found in database" }, 404);
@@ -159,8 +170,9 @@ export async function onRequestPost(context) {
         const response = await ai.models.generateContent(requestPayload);
 
         console.log("[Process API] Gemini response received");
-        if (response?.usage) {
-            console.log("[Process API] Usage:", response.usage);
+        const usage = (response as any)?.usage;
+        if (usage) {
+            console.log("[Process API] Usage:", usage);
         }
 
         // 5. Extract generated image from response candidates
