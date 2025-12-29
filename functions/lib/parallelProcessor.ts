@@ -30,16 +30,6 @@ export interface BatchProgress {
 }
 
 /**
- * In-memory usage tracking (per isolate)
- * In production, consider using KV or Durable Objects for cross-isolate tracking
- */
-interface UsageWindow {
-    requests: number[];    // Timestamps of requests in current minute
-    tokens: number;        // Tokens used in current minute
-    windowStart: number;   // Start of current minute window
-}
-
-/**
  * Per-request usage tracking.
  * 
  * NOTE: In Cloudflare Workers, global state is NOT shared across isolates.
@@ -56,10 +46,20 @@ interface UsageWindow {
  * Current approach: Conservative limits per-request that ensure overall
  * system stays well under quotas even with concurrent requests.
  */
+
+interface RequestRecord {
+    timestamp: number;
+    tokens: number;
+}
+
+interface UsageWindow {
+    requests: RequestRecord[];  // Requests with timestamps and token counts
+    windowStart: number;        // Start of tracking window
+}
+
 function createUsageWindow(): UsageWindow {
     return {
         requests: [],
-        tokens: 0,
         windowStart: Date.now(),
     };
 }
@@ -68,18 +68,20 @@ function createUsageWindow(): UsageWindow {
 let usageWindow: UsageWindow = createUsageWindow();
 
 /**
- * Reset usage window if minute has passed
+ * Refresh usage window - removes requests older than 1 minute
+ * Both request count AND token count are properly maintained
  */
 function refreshUsageWindow(): void {
     const now = Date.now();
     const windowDuration = 60_000; // 1 minute
 
     if (now - usageWindow.windowStart >= windowDuration) {
+        // Full window expired - reset everything
         usageWindow = createUsageWindow();
     } else {
-        // Remove requests older than 1 minute
+        // Filter out requests older than 1 minute
         const cutoff = now - windowDuration;
-        usageWindow.requests = usageWindow.requests.filter(ts => ts > cutoff);
+        usageWindow.requests = usageWindow.requests.filter(r => r.timestamp > cutoff);
     }
 }
 
@@ -88,18 +90,20 @@ function refreshUsageWindow(): void {
  */
 function recordRequest(tokens: number): void {
     refreshUsageWindow();
-    usageWindow.requests.push(Date.now());
-    usageWindow.tokens += tokens;
+    usageWindow.requests.push({
+        timestamp: Date.now(),
+        tokens
+    });
 }
 
 /**
- * Get current usage
+ * Get current usage - properly calculates both RPM and TPM
  */
 export function getCurrentUsage(): { rpm: number; tpm: number } {
     refreshUsageWindow();
     return {
         rpm: usageWindow.requests.length,
-        tpm: usageWindow.tokens,
+        tpm: usageWindow.requests.reduce((sum, r) => sum + r.tokens, 0),
     };
 }
 
@@ -114,9 +118,10 @@ async function waitForRateLimit(estimatedTokens: number): Promise<void> {
     while (waited < maxWaitMs) {
         refreshUsageWindow();
         
+        const usage = getCurrentUsage();
         const check = canMakeRequest(
-            usageWindow.requests.length,
-            usageWindow.tokens,
+            usage.rpm,
+            usage.tpm,
             estimatedTokens,
             true // Use safe mode
         );

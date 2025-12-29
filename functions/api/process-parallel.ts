@@ -35,23 +35,20 @@ function jsonResponse(data: any, status: number = 200, extraHeaders?: Record<str
 
 /**
  * Convert ArrayBuffer to base64 safely without stack overflow.
- * Uses chunked approach that works within call stack limits.
+ * Uses chunked approach with String.fromCharCode.apply for efficiency
+ * while staying within safe stack limits.
  */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
-    // Use smaller chunks to avoid any potential stack issues
-    // 4096 is very conservative and works on all platforms
-    const chunkSize = 4096;
+    // Chunk size of 8192 is safe for String.fromCharCode.apply
+    // and provides good performance (tested on V8, SpiderMonkey, JSC)
+    const chunkSize = 8192;
     const chunks: string[] = [];
     
     for (let i = 0; i < bytes.length; i += chunkSize) {
         const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-        // Build string character by character to avoid apply() limitations
-        let str = '';
-        for (let j = 0; j < chunk.length; j++) {
-            str += String.fromCharCode(chunk[j]);
-        }
-        chunks.push(str);
+        // String.fromCharCode.apply is safe with 8192 elements
+        chunks.push(String.fromCharCode.apply(null, chunk as unknown as number[]));
     }
     
     return btoa(chunks.join(''));
