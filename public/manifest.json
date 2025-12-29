@@ -1,0 +1,30 @@
+{
+  "name": "LightWork",
+  "short_name": "LightWork",
+  "description": "AI-powered image processing and enhancement tool",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2F0E9",
+  "theme_color": "#D97757",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities", "photo"]
+}

@@ -1,10 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { ImageJob } from '../types';
-import { X, Sparkles, ScanEye, Wand2, Download, Copy, Trash2, RefreshCcw, CheckCircle2, Clipboard, Maximize2, AlertCircle, Terminal, FileText, Image as ImageIcon, BoxSelect, Edit3, CheckSquare, DownloadCloud } from 'lucide-react';
+import { X, Sparkles, ScanEye, Wand2, Download, Copy, Trash2, RefreshCcw, CheckCircle2, Clipboard, Maximize2, AlertCircle, Terminal, FileText, Image as ImageIcon, BoxSelect, Edit3, CheckSquare, DownloadCloud, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { enhancePrompt, generateImageDescription, generateSmartFilename } from '../services/geminiService';
 import { useConfirmDialog } from './ConfirmDialog';
 // @ts-ignore
 import JSZip from 'jszip';
+
+// Custom hook for responsive breakpoint detection
+const useMediaQuery = (query: string) => {
+    const [matches, setMatches] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return window.matchMedia(query).matches;
+        }
+        return false;
+    });
+
+    useEffect(() => {
+        const mediaQuery = window.matchMedia(query);
+        const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+        
+        mediaQuery.addEventListener('change', handler);
+        return () => mediaQuery.removeEventListener('change', handler);
+    }, [query]);
+
+    return matches;
+};
 
 interface InspectorProps {
     selectedJobs: ImageJob[];
@@ -30,9 +50,20 @@ export const Inspector: React.FC<InspectorProps> = ({
     const [isAutoDrafting, setIsAutoDrafting] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
     const [justCopied, setJustCopied] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     const [isDownloadingZip, setIsDownloadingZip] = useState(false);
     const [zipProgress, setZipProgress] = useState<number | undefined>(undefined);
+
+    // Responsive: detect screens < 1200px for drawer mode
+    const isSmallScreen = useMediaQuery('(max-width: 1199px)');
+    
+    // Auto-collapse on small screens
+    useEffect(() => {
+        if (isSmallScreen && selectedJobs.length > 0) {
+            setIsCollapsed(true);
+        }
+    }, [isSmallScreen, selectedJobs.length]);
 
     // Batch State
     const [batchPrompt, setBatchPrompt] = useState('');
@@ -172,12 +203,47 @@ export const Inspector: React.FC<InspectorProps> = ({
         };
 
         return (
-            <div className="w-96 h-full bg-[#FDFCFB] border-l border-stone-200 flex flex-col shadow-2xl z-30 animate-in slide-in-from-right duration-300 font-sans">
+            <>
+                {/* Collapsed Toggle Button - Only visible on small screens when collapsed */}
+                {isSmallScreen && isCollapsed && (
+                    <button
+                        onClick={() => setIsCollapsed(false)}
+                        className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-stone-900 text-white p-3 rounded-l-xl shadow-lg hover:bg-stone-800 transition-colors"
+                        title="Open Inspector"
+                    >
+                        <PanelRightClose className="w-5 h-5" />
+                    </button>
+                )}
+                
+                {/* Backdrop for drawer mode */}
+                {isSmallScreen && !isCollapsed && (
+                    <div 
+                        className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-20 animate-in fade-in duration-200"
+                        onClick={() => setIsCollapsed(true)}
+                    />
+                )}
+                
+                <div className={`
+                    ${isSmallScreen ? 'fixed right-0 top-0 bottom-0 z-30' : ''} 
+                    ${isSmallScreen && isCollapsed ? 'translate-x-full' : 'translate-x-0'}
+                    w-96 max-w-[90vw] h-full bg-[#FDFCFB] border-l border-stone-200 flex flex-col shadow-2xl z-30 transition-transform duration-300 ease-out font-sans
+                `}>
                 <div className="h-20 px-8 border-b border-stone-100 flex items-center justify-between shrink-0 bg-[#FDFCFB]">
                     <span className="font-bold text-xl text-stone-900 font-heading">Inspector</span>
-                    <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-900 transition-colors">
-                        <X className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                        {isSmallScreen && (
+                            <button 
+                                onClick={() => setIsCollapsed(true)} 
+                                className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-900 transition-colors"
+                                title="Collapse Panel"
+                            >
+                                <PanelRightOpen className="w-5 h-5" />
+                            </button>
+                        )}
+                        <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-900 transition-colors">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-8 space-y-8">
@@ -246,6 +312,20 @@ export const Inspector: React.FC<InspectorProps> = ({
                                 <label className="text-xs font-bold text-stone-400 uppercase tracking-widest">Adjustment Prompt</label>
                             </div>
                             <div className="flex gap-1">
+                                <button 
+                                    onClick={() => {
+                                        if (job.localPrompt) {
+                                            navigator.clipboard.writeText(job.localPrompt);
+                                            setJustCopied(true);
+                                            setTimeout(() => setJustCopied(false), 2000);
+                                        }
+                                    }} 
+                                    disabled={!job.localPrompt} 
+                                    className="p-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-50 rounded-md transition-colors disabled:opacity-50" 
+                                    title="Copy Prompt"
+                                >
+                                    {justCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
                                 <button onClick={handleAutoDraft} disabled={isAutoDrafting} className="p-1.5 text-stone-400 hover:text-clay-600 hover:bg-clay-50 rounded-md transition-colors disabled:opacity-50" title="Auto-Draft">
                                     {isAutoDrafting ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <ScanEye className="w-3.5 h-3.5" />}
                                 </button>
@@ -308,7 +388,9 @@ export const Inspector: React.FC<InspectorProps> = ({
                         </div>
                     </div>
                 </div>
+                <ConfirmDialog />
             </div>
+            </>
         );
     }
 
@@ -398,15 +480,50 @@ export const Inspector: React.FC<InspectorProps> = ({
     };
 
     return (
-        <div className="w-96 h-full bg-[#FDFCFB] border-l border-stone-200 flex flex-col shadow-2xl z-30 animate-in slide-in-from-right duration-300 font-sans">
+        <>
+            {/* Collapsed Toggle Button - Only visible on small screens when collapsed */}
+            {isSmallScreen && isCollapsed && (
+                <button
+                    onClick={() => setIsCollapsed(false)}
+                    className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-stone-900 text-white p-3 rounded-l-xl shadow-lg hover:bg-stone-800 transition-colors"
+                    title="Open Inspector"
+                >
+                    <PanelRightClose className="w-5 h-5" />
+                </button>
+            )}
+            
+            {/* Backdrop for drawer mode */}
+            {isSmallScreen && !isCollapsed && (
+                <div 
+                    className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-20 animate-in fade-in duration-200"
+                    onClick={() => setIsCollapsed(true)}
+                />
+            )}
+            
+        <div className={`
+            ${isSmallScreen ? 'fixed right-0 top-0 bottom-0 z-30' : ''} 
+            ${isSmallScreen && isCollapsed ? 'translate-x-full' : 'translate-x-0'}
+            w-96 max-w-[90vw] h-full bg-[#FDFCFB] border-l border-stone-200 flex flex-col shadow-2xl z-30 transition-transform duration-300 ease-out font-sans
+        `}>
             <div className="h-20 px-8 border-b border-stone-100 flex items-center justify-between shrink-0 bg-stone-900 text-[#FDFCFB]">
                 <div className="flex items-center gap-3">
                     <BoxSelect className="w-5 h-5 text-clay-300" />
                     <span className="font-medium text-xl font-heading">{selectedJobs.length} Selected</span>
                 </div>
-                <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-                    <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-1">
+                    {isSmallScreen && (
+                        <button 
+                            onClick={() => setIsCollapsed(true)} 
+                            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                            title="Collapse Panel"
+                        >
+                            <PanelRightOpen className="w-5 h-5" />
+                        </button>
+                    )}
+                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-8">
@@ -531,5 +648,6 @@ export const Inspector: React.FC<InspectorProps> = ({
             </div>
             <ConfirmDialog />
         </div>
+        </>
     );
 };

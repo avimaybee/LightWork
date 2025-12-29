@@ -9,7 +9,7 @@ import { EmptyState } from './components/EmptyState';
 import { AuthProvider, useAuth } from './services/authContext';
 import { Project, ImageJob, ProcessingStatus, DEFAULT_MODULES, Module, AppModel, ApiMode } from './types';
 
-import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock, Loader2, FileText } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock, Loader2, FileText, LayoutGrid, Columns } from 'lucide-react';
 import { processImageWithGemini, generateSmartFilename } from './services/geminiService';
 import { generateThumbnail, wait, calculateBackoff } from './utils';
 import { api } from './services/api';
@@ -19,6 +19,8 @@ const LazyLightbox = React.lazy(() => import('./components/Lightbox').then(m => 
 const LazyOnboarding = React.lazy(() => import('./components/Onboarding').then(m => ({ default: m.Onboarding })));
 const LazyModulesManager = React.lazy(() => import('./components/ModulesManager').then(m => ({ default: m.ModulesManager })));
 const LazyBatchStatusPanel = React.lazy(() => import('./components/BatchStatusPanel').then(m => ({ default: m.BatchStatusPanel })));
+const LazyBackToTop = React.lazy(() => import('./components/BackToTop').then(m => ({ default: m.BackToTop })));
+const LazyBulkActionToolbar = React.lazy(() => import('./components/BulkActionToolbar').then(m => ({ default: m.BulkActionToolbar })));
 
 // Tier 1 Optimized Settings
 // With paid Tier 1 limits (500 RPM, 500K TPM), we can process much faster
@@ -50,6 +52,7 @@ function AppContent() {
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [toasts, setToasts] = useState<ToastMsg[]>([]);
     const [gridColumns, setGridColumns] = useState(3);
+    const [isMasonryView, setIsMasonryView] = useState(false);
     const [filter, setFilter] = useState<FilterType>('all');
     const [apiMode, setApiMode] = useState<ApiMode>('fast');
 
@@ -70,6 +73,8 @@ function AppContent() {
     const uploadProgressValueRef = useRef<Record<string, number>>({});
 
     const didAutoNameProjectRef = useRef<Record<string, true>>({});
+    const gridContainerRef = useRef<HTMLDivElement>(null);
+    const newImageIdsRef = useRef<string[]>([]);
     
     // Refs for handlers used in keyboard shortcuts (to avoid temporal dead zone)
     const handleProcessBatchRef = useRef<() => void>(() => {});
@@ -500,7 +505,23 @@ function AppContent() {
             });
         }
 
+        // Track new image IDs for smooth scroll
+        const newImageIds = newJobs.map(j => j.id);
+        newImageIdsRef.current = newImageIds;
+
         setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: [...p.jobs, ...newJobs] } : p));
+        
+        // Smooth scroll to first new image after DOM update
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                if (newImageIds.length > 0 && gridContainerRef.current) {
+                    const firstNewImage = gridContainerRef.current.querySelector(`[data-image-id="${newImageIds[0]}"]`);
+                    if (firstNewImage) {
+                        firstNewImage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            }, 100);
+        });
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -513,6 +534,83 @@ function AppContent() {
         e.preventDefault();
         setIsDragging(false);
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) processFiles(Array.from(e.dataTransfer.files));
+    };
+
+    // Bulk Action Handlers
+    const handleBulkDelete = () => {
+        if (selectedJobs.length === 0) return;
+        confirm({
+            title: selectedJobs.length === 1 ? 'Delete Image' : `Delete ${selectedJobs.length} Images`,
+            message: 'Are you sure you want to delete the selected images? This action cannot be undone.',
+            confirmLabel: 'Delete',
+            variant: 'danger',
+        }).then((confirmed) => {
+            if (confirmed) {
+                const ids = selectedJobs.map(j => j.id);
+                setProjects(prev => prev.map(p =>
+                    p.id === currentProjectId
+                        ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) }
+                        : p
+                ));
+                clearSelection();
+            }
+        });
+    };
+
+    const handleBulkDownload = async () => {
+        const readyJobs = selectedJobs.filter(j => j.resultUrl);
+        if (readyJobs.length === 0) return;
+
+        // Dynamic import JSZip
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+
+        const getZipFileName = (j: ImageJob) => {
+            const base = (j.fileName || 'image').replace(/\.[^/.]+$/, '');
+            return `LightWork_${base}_processed.png`;
+        };
+
+        try {
+            for (const j of readyJobs) {
+                const resultUrl = j.resultUrl;
+                if (!resultUrl) continue;
+
+                if (resultUrl.startsWith('data:')) {
+                    const base64 = resultUrl.split(',')[1] || '';
+                    zip.file(getZipFileName(j), base64, { base64: true });
+                } else {
+                    const res = await fetch(resultUrl);
+                    const blob = await res.blob();
+                    zip.file(getZipFileName(j), blob);
+                }
+            }
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = `LightWork_Batch_${Date.now()}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+        } catch (err) {
+            console.error('Bulk download failed:', err);
+        }
+    };
+
+    const handleBulkProcess = () => {
+        // Process only selected queued jobs - trigger the process queue
+        processQueueRef.current?.();
+    };
+
+    const handleBulkResetStatus = () => {
+        const errorIds = selectedJobs.filter(j => j.status === 'error').map(j => j.id);
+        if (errorIds.length === 0) return;
+        setProjects(prev => prev.map(p =>
+            p.id === currentProjectId
+                ? { ...p, jobs: p.jobs.map(j => errorIds.includes(j.id) ? { ...j, status: 'queued', errorMsg: undefined, retryCount: 0 } : j) }
+                : p
+        ));
     };
 
     const handleJobClick = (id: string, shiftKey: boolean, metaKey: boolean) => {
@@ -1004,24 +1102,62 @@ function AppContent() {
                                     />
                                 </div>
 
+                                {/* Masonry Toggle */}
+                                <button
+                                    onClick={() => setIsMasonryView(!isMasonryView)}
+                                    className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm transition-colors ${
+                                        isMasonryView 
+                                            ? 'bg-stone-900 border-stone-900 text-white' 
+                                            : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50'
+                                    }`}
+                                    title={isMasonryView ? 'Switch to Grid View' : 'Switch to Masonry View'}
+                                >
+                                    {isMasonryView ? <Columns className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+                                </button>
+
                                 <label className="group cursor-pointer flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 rounded-lg hover:border-clay-400 hover:shadow-md hover:shadow-clay-500/5 active:scale-95 transition-all h-9"><UploadCloud className="w-4 h-4 text-stone-500 group-hover:text-clay-600" /><span className="text-xs font-bold uppercase tracking-wide text-stone-700 font-heading">Add Assets</span><input type="file" multiple accept="image/*" className="hidden" onChange={handleFileUpload} /></label>
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-10 pb-40 scroll-smooth" onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}>
+                        <div ref={gridContainerRef} className="flex-1 overflow-y-auto p-10 pb-40 scroll-smooth" onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}>
                             {(currentProject.jobs || []).length === 0 ? (
                                 <EmptyState type="workspace" />
+                            ) : isMasonryView ? (
+                                /* Masonry Layout */
+                                <div 
+                                    className="masonry-grid pb-24" 
+                                    style={{ '--masonry-columns': gridColumns } as React.CSSProperties}
+                                >
+                                    {renderedJobs.map(job => (
+                                        <div key={job.id} data-image-id={job.id}>
+                                            <ImageCard
+                                                job={job}
+                                                isSelected={!!job.selected}
+                                                isActive={!!job.selected}
+                                                onToggleSelect={toggleSelection}
+                                                onClick={(id, e) => handleJobClick(id, e.shiftKey, e.metaKey || e.ctrlKey)}
+                                            />
+                                        </div>
+                                    ))}
+
+                                    {/* Infinite scroll sentinel */}
+                                    {renderedJobs.length < filteredJobs.length && (
+                                        <div ref={loadMoreRef} className="h-8" />
+                                    )}
+                                </div>
                             ) : (
+                                /* Standard Grid Layout */
                                 <div className="grid gap-8 pb-24" style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}>
                                     {renderedJobs.map(job => (
-                                        <ImageCard
-                                            key={job.id}
-                                            job={job}
-                                            isSelected={!!job.selected}
-                                            isActive={!!job.selected}
-                                            onToggleSelect={toggleSelection}
-                                            onClick={(id, e) => handleJobClick(id, e.shiftKey, e.metaKey || e.ctrlKey)}
-                                        />
+                                        <div key={job.id} data-image-id={job.id}>
+                                            <ImageCard
+                                                job={job}
+                                                isSelected={!!job.selected}
+                                                isActive={!!job.selected}
+                                                onToggleSelect={toggleSelection}
+                                                onClick={(id, e) => handleJobClick(id, e.shiftKey, e.metaKey || e.ctrlKey)}
+                                            />
+                                        </div>
                                     ))}
 
                                     {/* Infinite scroll sentinel */}
@@ -1056,7 +1192,7 @@ function AppContent() {
                         </Suspense>
                     </main>
 
-                    {selectedJobs.length > 0 && (
+                    {selectedJobs.length === 1 && (
                         <Suspense fallback={null}>
                             <LazyInspector
                                 selectedJobs={selectedJobs}
@@ -1074,6 +1210,24 @@ function AppContent() {
                             />
                         </Suspense>
                     )}
+                    
+                    {/* Bulk Action Toolbar */}
+                    <Suspense fallback={null}>
+                        <LazyBulkActionToolbar
+                            selectedJobs={selectedJobs}
+                            onDelete={handleBulkDelete}
+                            onDownload={handleBulkDownload}
+                            onProcess={handleBulkProcess}
+                            onClearSelection={clearSelection}
+                            onResetStatus={handleBulkResetStatus}
+                            isProcessing={isProcessing}
+                        />
+                    </Suspense>
+                    
+                    {/* Back to Top Button */}
+                    <Suspense fallback={null}>
+                        <LazyBackToTop />
+                    </Suspense>
                 </div>
             )}
         </div>

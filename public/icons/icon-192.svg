@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" fill="none">
+  <!-- Background rounded square -->
+  <rect width="192" height="192" rx="42" fill="#292524"/>
+  
+  <!-- Stylized "L" with accent -->
+  <path d="M60 48v96h60v-18H96V48H60z" fill="#FDFCFB"/>
+  <rect x="120" y="126" width="24" height="18" rx="3" fill="#D97757"/>
+</svg>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Module } from '../types';
-import { ArrowLeft, Plus, Trash2, Edit3, Save, X, LayoutGrid, Check, Terminal, Star } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit3, Save, X, LayoutGrid, Check, Terminal, Star, Sparkles, Zap, Search } from 'lucide-react';
 
 interface ModulesManagerProps {
     modules: Module[];
@@ -18,6 +18,9 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
     // Detail / Edit View State
     const [selectedModule, setSelectedModule] = useState<Module | null>(null);
     const [editPrompt, setEditPrompt] = useState('');
+    
+    // Search State
+    const [searchTerm, setSearchTerm] = useState('');
 
     const FAVORITES_KEY = 'lightwork_favorite_module_ids';
     const loadFavorites = (): Set<string> => {
@@ -56,12 +59,21 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
 
     const isFavorite = (id: string) => favoriteIds.has(id);
 
-    const orderedModules = [...modules].sort((a, b) => {
-        const af = isFavorite(a.id);
-        const bf = isFavorite(b.id);
-        if (af !== bf) return af ? -1 : 1;
-        return (a.name || '').localeCompare(b.name || '');
-    });
+    const orderedModules = [...modules]
+        .filter(module => {
+            if (!searchTerm.trim()) return true;
+            const term = searchTerm.toLowerCase();
+            return (
+                module.name.toLowerCase().includes(term) ||
+                module.prompt.toLowerCase().includes(term)
+            );
+        })
+        .sort((a, b) => {
+            const af = isFavorite(a.id);
+            const bf = isFavorite(b.id);
+            if (af !== bf) return af ? -1 : 1;
+            return (a.name || '').localeCompare(b.name || '');
+        });
 
     const handleCreate = () => {
         if(newName && newPrompt) {
@@ -96,6 +108,26 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                     <span className="font-bold text-sm">Back</span>
                 </button>
                 <h1 className="text-2xl font-bold text-stone-900 font-heading">Module Library</h1>
+                
+                {/* Search Bar */}
+                <div className="ml-auto relative max-w-xs w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                    <input
+                        type="text"
+                        placeholder="Search modules..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full bg-white border border-stone-200 rounded-lg pl-10 pr-4 h-10 text-sm font-medium text-stone-700 placeholder:text-stone-400 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400/20 transition-all font-sans shadow-sm"
+                    />
+                    {searchTerm && (
+                        <button
+                            onClick={() => setSearchTerm('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-600"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Content */}
@@ -194,9 +226,21 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
 
                             {/* Card Body */}
                             <div className="p-6 flex-1 flex flex-col relative">
+                                {/* AI Model & Cost Badges */}
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-50 border border-purple-100 rounded-md">
+                                        <Sparkles className="w-3 h-3 text-purple-500" />
+                                        <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wide">Gemini</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-md">
+                                        <Zap className="w-3 h-3 text-emerald-500" />
+                                        <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">~{Math.ceil(module.prompt.length / 100)}¢</span>
+                                    </div>
+                                </div>
+                                
                                 <div className="relative flex-1">
                                     <p 
-                                        className="text-xs text-stone-600 font-mono leading-relaxed overflow-hidden h-36"
+                                        className="text-xs text-stone-600 font-mono leading-relaxed overflow-hidden h-28"
                                         style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}
                                     >
                                         {module.prompt}

@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Lucide Icon Consistency - Global stroke-width standardization */
+/* Sets all Lucide icons to a consistent 1.75px stroke width */
+.lucide {
+	stroke-width: 1.75px;
+}
+
 @theme {
 	--font-sans: "Noto Sans", ui-sans-serif, system-ui, sans-serif;
 	--font-heading: "Lexend Deca", ui-sans-serif, system-ui, sans-serif;
@@ -38,6 +44,12 @@
 	--color-status-processing: #2563eb;
 	--color-status-processing-bg: #dbeafe;
 	--color-status-processing-text: #1d4ed8;
+
+	/* Secondary Text - WCAG AA compliant */
+	/* Use --color-secondary-text instead of stone-400 for better contrast */
+	--color-secondary-text: #57534e; /* stone-600 - meets WCAG AA on light backgrounds */
+	--color-tertiary-text: #78716c;  /* stone-500 - for less important text */
+	--color-muted-text: #a8a29e;     /* stone-400 - only for decorative/disabled text */
 }
 
 @layer utilities {
@@ -101,4 +113,20 @@ button:focus-visible {
 
 *::-webkit-scrollbar-corner {
 	background: transparent;
+}
+/* Masonry Grid Layout - CSS Columns approach for varied image heights */
+.masonry-grid {
+	columns: var(--masonry-columns, 3);
+	column-gap: 2rem;
+}
+
+.masonry-grid > * {
+	break-inside: avoid;
+	margin-bottom: 2rem;
+}
+
+/* Grid view (standard) */
+.standard-grid {
+	display: grid;
+	gap: 2rem;
 }

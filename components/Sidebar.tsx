@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Project } from '../types';
-import { Plus, Settings, Command, Key, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, Box, LogOut, User, Loader2 } from 'lucide-react';
+import { Plus, Settings, Command, Key, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, Box, LogOut, User, Loader2, Clock } from 'lucide-react';
 import { useAuth } from '../services/authContext';
 
 interface SidebarProps {
@@ -15,6 +15,8 @@ interface SidebarProps {
 }
 
 const ITEMS_PER_PAGE = 15;
+const RECENT_PROJECTS_KEY = 'lightwork_recent_projects';
+const MAX_RECENT = 3;
 
 export const Sidebar: React.FC<SidebarProps> = ({
   projects,
@@ -32,9 +34,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editName, setEditName] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [recentIds, setRecentIds] = useState<string[]>([]);
 
   const observerTarget = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Load recent projects from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(RECENT_PROJECTS_KEY);
+      if (stored) {
+        setRecentIds(JSON.parse(stored));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Track current project as recently accessed
+  useEffect(() => {
+    if (!currentProjectId) return;
+    
+    setRecentIds(prev => {
+      // Remove current ID if exists, add to front
+      const filtered = prev.filter(id => id !== currentProjectId);
+      const updated = [currentProjectId, ...filtered].slice(0, MAX_RECENT);
+      
+      // Persist to localStorage
+      try {
+        localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      
+      return updated;
+    });
+  }, [currentProjectId]);
+
+  // Get recent projects (that still exist)
+  const recentProjects = useMemo(() => {
+    return recentIds
+      .map(id => projects.find(p => p.id === id))
+      .filter((p): p is Project => p !== undefined)
+      .slice(0, MAX_RECENT);
+  }, [recentIds, projects]);
 
   // Handle create project with loading state
   const handleCreateProject = async () => {
@@ -47,12 +90,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Search Filter
+  // Search Filter (excluding recent projects to avoid duplication when not searching)
   const filteredProjects = useMemo(() => {
-    return projects.filter(p =>
+    const filtered = projects.filter(p =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [projects, searchTerm]);
+    
+    // When searching, show all matches; otherwise exclude recent projects
+    if (searchTerm) {
+      return filtered;
+    }
+    
+    const recentIdSet = new Set(recentIds);
+    return filtered.filter(p => !recentIdSet.has(p.id));
+  }, [projects, searchTerm, recentIds]);
 
   // Pagination Slice
   const displayedProjects = useMemo(() => {
@@ -185,17 +236,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Main Nav (Scrollable) */}
       <div className={`flex-1 overflow-y-auto px-2 space-y-0.5 ${isCollapsed ? 'scrollbar-hide' : ''}`}>
+        {/* Quick Access - Recent Projects (hide when searching) */}
+        {!isCollapsed && !searchTerm && recentProjects.length > 0 && (
+          <>
+            <div className="px-3 py-2 mt-2">
+              <p className="text-[10px] font-heading font-bold text-clay-600 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-3 h-3" />
+                Quick Access
+              </p>
+            </div>
+            {recentProjects.map((project) => {
+              const isActive = currentProjectId === project.id && currentView === 'workspace';
+              return (
+                <div
+                  key={`recent-${project.id}`}
+                  className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive
+                    ? 'bg-clay-100 text-stone-900 border-l-2 border-clay-500'
+                    : 'text-stone-600 hover:bg-clay-50 hover:text-stone-900 border-l-2 border-transparent'
+                    }`}
+                >
+                  <button
+                    onClick={() => onSelectProject(project.id)}
+                    onDoubleClick={() => startEditing(project)}
+                    className={`flex items-center font-medium h-9 font-sans w-full gap-3 px-3 text-sm pr-8 ${isActive ? 'pl-5 font-semibold' : ''}`}
+                  >
+                    <Clock className={`flex-shrink-0 w-3.5 h-3.5 transition-colors ${isActive ? 'text-clay-600' : 'text-clay-400 group-hover:text-clay-500'}`} />
+                    <span className="truncate text-left flex-1">{project.name}</span>
+                    {project.jobs.length > 0 && (
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-clay-200 text-clay-700' : 'bg-clay-100 text-clay-500 group-hover:text-clay-600'}`}>
+                        {project.jobs.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+            <div className="border-b border-stone-100 my-2 mx-3" />
+          </>
+        )}
+
         {!isCollapsed && (
           <div className="px-3 py-2 mt-2">
-            <p className="text-[10px] font-heading font-bold text-stone-400 uppercase tracking-wider">Recent Sessions</p>
+            <p className="text-[10px] font-heading font-bold text-stone-500 uppercase tracking-wider">
+              {searchTerm ? 'Search Results' : 'All Sessions'}
+            </p>
           </div>
         )}
 
         {filteredProjects.length === 0 ? (
           !isCollapsed && (
             <div className="px-4 py-12 text-center flex flex-col items-center gap-3">
-              <Archive className="w-8 h-8 text-stone-200" />
-              <span className="text-sm text-stone-400 italic">No sessions found</span>
+              <Archive className="w-8 h-8 text-stone-300" />
+              <span className="text-sm text-stone-500 italic">No sessions found</span>
             </div>
           )
         ) : (
@@ -206,13 +298,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div
                   key={project.id}
                   className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive
-                    ? 'bg-stone-100 text-stone-900'
-                    : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
+                    ? 'bg-clay-50 text-stone-900 border-l-2 border-clay-500'
+                    : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900 border-l-2 border-transparent'
                     } ${isCollapsed ? 'justify-center py-2' : ''}`}
                 >
-                  {/* Active Marker */}
+                  {/* Active Accent Bar - improved visibility */}
                   {isActive && !isCollapsed && (
-                    <div className="absolute left-2 w-1 h-1 rounded-full bg-stone-900" />
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-clay-500 shadow-sm" />
                   )}
 
                   {editingId === project.id && !isCollapsed ? (
@@ -242,13 +334,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                             ${isActive && !isCollapsed ? 'pl-5 font-semibold' : ''} 
                                         `}
                       >
-                        <History className={`flex-shrink-0 transition-colors ${isActive ? 'text-stone-900' : 'text-stone-400 group-hover:text-stone-500'} ${isCollapsed ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
+                        <History className={`flex-shrink-0 transition-colors ${isActive ? 'text-stone-900' : 'text-stone-500 group-hover:text-stone-600'} ${isCollapsed ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
 
                         {!isCollapsed && (
                           <>
                             <span className="truncate text-left flex-1">{project.name}</span>
                             {project.jobs.length > 0 && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-stone-200 text-stone-600' : 'bg-stone-100 text-stone-400 group-hover:text-stone-500'}`}>{project.jobs.length}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-stone-200 text-stone-600' : 'bg-stone-100 text-stone-500 group-hover:text-stone-600'}`}>{project.jobs.length}</span>
                             )}
                           </>
                         )}
@@ -332,7 +424,7 @@ function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-heading font-semibold text-stone-900 truncate">{userName}</p>
-          <p className="text-[10px] text-stone-400 truncate">{userEmail}</p>
+          <p className="text-[10px] text-stone-500 truncate">{userEmail}</p>
         </div>
       </div>
 

@@ -10,10 +10,14 @@ interface TooltipProps {
     maxWidth?: number;
 }
 
+// Default tooltip delay standardized to 700ms for non-critical tooltips
+// to reduce visual noise when moving the mouse
+const DEFAULT_TOOLTIP_DELAY = 700;
+
 export const Tooltip: React.FC<TooltipProps> = ({
     content,
     children,
-    delay = 400,
+    delay = DEFAULT_TOOLTIP_DELAY,
     position = 'top',
     maxWidth = 280,
 }) => {

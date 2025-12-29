@@ -126,6 +126,12 @@ export const ImageCard: React.FC<ImageCardProps> = ({
               <p className="text-[10px] font-bold text-stone-700 truncate font-sans">
                   {job.fileName}
               </p>
+              {/* Image dimensions on hover */}
+              {job.width && job.height && (
+                <p className="text-[9px] text-stone-500 font-medium font-mono">
+                    {job.width} × {job.height}
+                </p>
+              )}
           </div>
           
           {job.status !== 'queued' && (
