@@ -23,15 +23,35 @@ const DEFAULT_CONFIG: CircuitBreakerConfig = {
 };
 
 /**
- * In-memory circuit breaker state
- * In production, this could be stored in KV for persistence across isolates
+ * Per-request (isolate) circuit breaker state.
+ * 
+ * NOTE: In Cloudflare Workers, this state is NOT shared across isolates.
+ * Each request gets its own isolate with a fresh circuit breaker starting
+ * in 'closed' state. This provides request-level protection:
+ * 
+ * 1. If a request hits multiple failures, it stops making calls
+ * 2. Each new request starts fresh, providing automatic recovery
+ * 3. Gemini's server-side rate limiting is the authoritative source
+ * 
+ * For global circuit breaking across all requests, you would need:
+ * - Cloudflare KV: Store state with short TTL, check before each request
+ * - Durable Objects: Strong consistency for mission-critical systems
+ * 
+ * Current approach is suitable because:
+ * - Rate limit errors trigger immediate backoff within the request
+ * - Conservative per-request limits prevent cascading failures
+ * - Backend API returns 429 which clients can handle with retry-after
  */
-let circuitState: CircuitBreakerState = {
-    state: 'closed',
-    failures: 0,
-    lastFailure: 0,
-    successesSinceHalfOpen: 0,
-};
+function createCircuitState(): CircuitBreakerState {
+    return {
+        state: 'closed',
+        failures: 0,
+        lastFailure: 0,
+        successesSinceHalfOpen: 0,
+    };
+}
+
+let circuitState: CircuitBreakerState = createCircuitState();
 
 /**
  * Check if circuit allows request

@@ -33,16 +33,28 @@ function jsonResponse(data: any, status: number = 200, extraHeaders?: Record<str
     });
 }
 
-// Helper to convert ArrayBuffer to base64
+/**
+ * Convert ArrayBuffer to base64 safely without stack overflow.
+ * Uses chunked approach that works within call stack limits.
+ */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const chunkSize = 8192;
+    // Use smaller chunks to avoid any potential stack issues
+    // 4096 is very conservative and works on all platforms
+    const chunkSize = 4096;
+    const chunks: string[] = [];
+    
     for (let i = 0; i < bytes.length; i += chunkSize) {
-        const chunk = bytes.subarray(i, i + chunkSize);
-        binary += String.fromCharCode.apply(null, chunk as any);
+        const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+        // Build string character by character to avoid apply() limitations
+        let str = '';
+        for (let j = 0; j < chunk.length; j++) {
+            str += String.fromCharCode(chunk[j]);
+        }
+        chunks.push(str);
     }
-    return btoa(binary);
+    
+    return btoa(chunks.join(''));
 }
 
 /**

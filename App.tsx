@@ -309,10 +309,15 @@ function AppContent() {
             updateJob(job.id, { status: 'processing', errorMsg: undefined });
         }
 
+        // Track retries per batch to prevent infinite loops
+        const MAX_BATCH_RETRIES = 3;
+        const batchRetries = new Map<number, number>();
+
         try {
             // Process in batches of PARALLEL_BATCH_SIZE
-            for (let i = 0; i < queuedJobs.length; i += PARALLEL_BATCH_SIZE) {
-                const batch = queuedJobs.slice(i, i + PARALLEL_BATCH_SIZE);
+            let batchIndex = 0;
+            while (batchIndex < queuedJobs.length) {
+                const batch = queuedJobs.slice(batchIndex, batchIndex + PARALLEL_BATCH_SIZE);
                 const jobIds = batch.map(j => j.id);
                 const model = freshProject.selectedMode === 'fast' ? AppModel.FAST : AppModel.PRO;
 
@@ -324,30 +329,43 @@ function AppContent() {
 
                 if (!result.success) {
                     if (result.retryAfterMs) {
-                        // Rate limited - wait and retry this batch
-                        const waitSec = Math.ceil(result.retryAfterMs / 1000);
-                        addToast('warning', `Rate limited. Waiting ${waitSec}s...`);
+                        // Check if we've exceeded max retries for this batch
+                        const currentRetries = batchRetries.get(batchIndex) || 0;
                         
-                        for (const job of batch) {
-                            updateJob(job.id, { 
-                                status: 'retrying', 
-                                errorMsg: `Rate limited. Waiting ${waitSec}s...` 
-                            });
+                        if (currentRetries < MAX_BATCH_RETRIES) {
+                            // Rate limited - wait and retry this batch
+                            const waitSec = Math.ceil(result.retryAfterMs / 1000);
+                            addToast('warning', `Rate limited. Waiting ${waitSec}s... (retry ${currentRetries + 1}/${MAX_BATCH_RETRIES})`);
+                            
+                            for (const job of batch) {
+                                updateJob(job.id, { 
+                                    status: 'retrying', 
+                                    errorMsg: `Rate limited. Waiting ${waitSec}s...` 
+                                });
+                            }
+                            
+                            await wait(result.retryAfterMs);
+                            
+                            // Record retry attempt
+                            batchRetries.set(batchIndex, currentRetries + 1);
+                            
+                            // Reset status and retry (don't advance batchIndex)
+                            for (const job of batch) {
+                                updateJob(job.id, { status: 'processing' });
+                            }
+                            continue;
+                        } else {
+                            // Max retries exceeded - mark as failed
+                            addToast('error', `Batch failed after ${MAX_BATCH_RETRIES} retries`);
+                            for (const job of batch) {
+                                updateJob(job.id, { status: 'error', errorMsg: 'Max retries exceeded' });
+                            }
                         }
-                        
-                        await wait(result.retryAfterMs);
-                        
-                        // Retry this batch
-                        i -= PARALLEL_BATCH_SIZE; // Go back to retry this batch
+                    } else {
+                        // General error - mark all as failed
                         for (const job of batch) {
-                            updateJob(job.id, { status: 'processing' });
+                            updateJob(job.id, { status: 'error', errorMsg: result.error });
                         }
-                        continue;
-                    }
-                    
-                    // General error - mark all as failed
-                    for (const job of batch) {
-                        updateJob(job.id, { status: 'error', errorMsg: result.error });
                     }
                 } else if (result.processed) {
                     // Update individual job statuses
@@ -364,14 +382,17 @@ function AppContent() {
                     }
 
                     // Show progress
-                    const completed = i + batch.length;
+                    const completed = batchIndex + batch.length;
                     if (completed < queuedJobs.length) {
                         addToast('info', `Processed ${completed}/${queuedJobs.length}...`);
                     }
                 }
 
+                // Move to next batch
+                batchIndex += PARALLEL_BATCH_SIZE;
+
                 // Small delay between batches for safety
-                if (i + PARALLEL_BATCH_SIZE < queuedJobs.length) {
+                if (batchIndex < queuedJobs.length) {
                     await wait(MIN_GEMINI_REQUEST_SPACING_MS);
                 }
             }

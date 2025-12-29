@@ -93,7 +93,10 @@ function getRecommendations(
     // Circuit breaker recommendations
     if (circuitStatus.state === 'open') {
         recommendations.push('Use batch API (economy mode) until circuit recovers');
-        recommendations.push(`Wait ${Math.ceil(60 - (Date.now() - circuitStatus.lastFailure) / 1000)}s before retrying`);
+        const waitSeconds = Math.max(0, Math.ceil(60 - (Date.now() - circuitStatus.lastFailure) / 1000));
+        if (waitSeconds > 0) {
+            recommendations.push(`Wait ${waitSeconds}s before retrying`);
+        }
     } else if (circuitStatus.state === 'half-open') {
         recommendations.push('System recovering - reduce concurrent requests');
     }

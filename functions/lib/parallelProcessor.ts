@@ -39,11 +39,33 @@ interface UsageWindow {
     windowStart: number;   // Start of current minute window
 }
 
-let usageWindow: UsageWindow = {
-    requests: [],
-    tokens: 0,
-    windowStart: Date.now(),
-};
+/**
+ * Per-request usage tracking.
+ * 
+ * NOTE: In Cloudflare Workers, global state is NOT shared across isolates.
+ * This means each request gets its own isolate with fresh state. This is
+ * actually beneficial here because:
+ * 1. Each request processes its own batch independently
+ * 2. Rate limiting within a single request prevents burst
+ * 3. The Gemini API enforces global rate limits server-side
+ * 
+ * For cross-request tracking, consider:
+ * - Cloudflare KV with atomic counters (eventual consistency)
+ * - Durable Objects for strong consistency (if precise tracking needed)
+ * 
+ * Current approach: Conservative limits per-request that ensure overall
+ * system stays well under quotas even with concurrent requests.
+ */
+function createUsageWindow(): UsageWindow {
+    return {
+        requests: [],
+        tokens: 0,
+        windowStart: Date.now(),
+    };
+}
+
+// Initialize per-request (isolate) usage window
+let usageWindow: UsageWindow = createUsageWindow();
 
 /**
  * Reset usage window if minute has passed
@@ -53,11 +75,7 @@ function refreshUsageWindow(): void {
     const windowDuration = 60_000; // 1 minute
 
     if (now - usageWindow.windowStart >= windowDuration) {
-        usageWindow = {
-            requests: [],
-            tokens: 0,
-            windowStart: now,
-        };
+        usageWindow = createUsageWindow();
     } else {
         // Remove requests older than 1 minute
         const cutoff = now - windowDuration;

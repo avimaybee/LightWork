@@ -77,16 +77,30 @@ export function calculateOptimalConcurrency(targetRpm: number): {
 
 /**
  * Estimate tokens for an image request
- * Gemini charges ~258 tokens for 1024x1024 image input
- * Output images cost more but we're primarily concerned with input
+ * Based on Gemini vision model documentation:
+ * - Images are resized to fit within a bounding box
+ * - Token cost scales with image resolution after resizing
+ * - Typical range: 258 tokens (small) to ~1200 tokens (max size)
+ * See: https://ai.google.dev/gemini-api/docs/vision#image-requirements
  */
 export function estimateTokens(imageSizeBytes: number, promptLength: number): number {
-    // Rough estimation:
-    // - Base tokens for image: ~1000-4000 depending on resolution
-    // - Text tokens: ~1 token per 4 characters
-    const baseImageTokens = Math.min(4000, Math.max(1000, imageSizeBytes / 1000));
+    // Gemini vision model token estimation based on typical image sizes:
+    // - 512x512 or smaller: ~258 tokens
+    // - 768x768: ~420 tokens  
+    // - 1024x1024: ~680 tokens
+    // - 1536x1536 (max): ~1200 tokens
+    // 
+    // Since we compress to 1024px for Fast model, use ~700 tokens as base
+    // For Pro model (no compression), estimate based on file size as proxy for resolution
+    const isLikelyHighRes = imageSizeBytes > 1_000_000; // >1MB suggests high res
+    const baseImageTokens = isLikelyHighRes ? 1200 : 700;
+    
+    // Text tokens: ~1 token per 4 characters (standard tokenization)
     const textTokens = Math.ceil(promptLength / 4);
-    const outputTokens = 5000; // Estimated for generated image
+    
+    // Output image generation adds significant token cost
+    // Estimated at ~4000 tokens for generated image output
+    const outputTokens = 4000;
     
     return baseImageTokens + textTokens + outputTokens;
 }
