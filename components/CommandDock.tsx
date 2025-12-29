@@ -154,7 +154,7 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 20, scale: 0.95 }}
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                    className="w-full glass border-b-0 rounded-t-xl p-6 shadow-2xl shadow-stone-900/10 mb-[-12px] pb-8 z-0">
+                    className="w-full bg-[#FDFCFB]/95 backdrop-blur-xl border border-stone-200/80 border-b-0 rounded-t-xl p-6 shadow-2xl shadow-stone-900/10 mb-[-12px] pb-8 z-0">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <div className="p-1.5 bg-stone-100 rounded-md">
@@ -188,7 +188,7 @@ export const CommandDock: React.FC<CommandDockProps> = ({
             </AnimatePresence>
 
             {/* Main Control Bar */}
-            <div className="glass shadow-2xl shadow-stone-900/10 rounded-2xl px-4 py-3 flex items-end gap-4 transition-all relative z-10">
+            <div className="bg-[#FDFCFB]/95 backdrop-blur-xl shadow-2xl shadow-stone-900/15 rounded-2xl px-4 py-3 flex items-end gap-4 transition-all relative z-10 border border-stone-200/80">
 
                 {/* Toggle Expand */}
                 <button

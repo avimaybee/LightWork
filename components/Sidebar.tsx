@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Project } from '../types';
-import { Plus, Settings, Command, Key, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, Box, LogOut, User, Loader2, Clock } from 'lucide-react';
+import { Plus, Settings, Command, Key, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, Box, LogOut, User, Loader2, Pin, PinOff } from 'lucide-react';
 import { useAuth } from '../services/authContext';
 
 interface SidebarProps {
@@ -15,8 +15,8 @@ interface SidebarProps {
 }
 
 const ITEMS_PER_PAGE = 15;
-const RECENT_PROJECTS_KEY = 'lightwork_recent_projects';
-const MAX_RECENT = 3;
+const PINNED_PROJECTS_KEY = 'lightwork_pinned_projects';
+const MAX_PINNED = 5;
 
 export const Sidebar: React.FC<SidebarProps> = ({
   projects,
@@ -34,50 +34,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editName, setEditName] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [recentIds, setRecentIds] = useState<string[]>([]);
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
 
   const observerTarget = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load recent projects from localStorage
+  // Load pinned projects from localStorage
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(RECENT_PROJECTS_KEY);
+      const stored = localStorage.getItem(PINNED_PROJECTS_KEY);
       if (stored) {
-        setRecentIds(JSON.parse(stored));
+        setPinnedIds(JSON.parse(stored));
       }
     } catch {
       // ignore
     }
   }, []);
 
-  // Track current project as recently accessed
-  useEffect(() => {
-    if (!currentProjectId) return;
-    
-    setRecentIds(prev => {
-      // Remove current ID if exists, add to front
-      const filtered = prev.filter(id => id !== currentProjectId);
-      const updated = [currentProjectId, ...filtered].slice(0, MAX_RECENT);
-      
-      // Persist to localStorage
-      try {
-        localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updated));
-      } catch {
-        // ignore
-      }
-      
-      return updated;
-    });
-  }, [currentProjectId]);
+  // Save pinned projects to localStorage
+  const savePinnedIds = (ids: string[]) => {
+    setPinnedIds(ids);
+    try {
+      localStorage.setItem(PINNED_PROJECTS_KEY, JSON.stringify(ids));
+    } catch {
+      // ignore
+    }
+  };
 
-  // Get recent projects (that still exist)
-  const recentProjects = useMemo(() => {
-    return recentIds
+  // Toggle pin status
+  const togglePin = (projectId: string) => {
+    if (pinnedIds.includes(projectId)) {
+      // Unpin
+      savePinnedIds(pinnedIds.filter(id => id !== projectId));
+    } else {
+      // Pin (if under limit)
+      if (pinnedIds.length < MAX_PINNED) {
+        savePinnedIds([...pinnedIds, projectId]);
+      }
+    }
+  };
+
+  const isPinned = (projectId: string) => pinnedIds.includes(projectId);
+
+  // Get pinned projects (that still exist)
+  const pinnedProjects = useMemo(() => {
+    return pinnedIds
       .map(id => projects.find(p => p.id === id))
-      .filter((p): p is Project => p !== undefined)
-      .slice(0, MAX_RECENT);
-  }, [recentIds, projects]);
+      .filter((p): p is Project => p !== undefined);
+  }, [pinnedIds, projects]);
 
   // Handle create project with loading state
   const handleCreateProject = async () => {
@@ -90,20 +94,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Search Filter (excluding recent projects to avoid duplication when not searching)
+  // Search Filter (excluding pinned projects to avoid duplication when not searching)
   const filteredProjects = useMemo(() => {
     const filtered = projects.filter(p =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
-    // When searching, show all matches; otherwise exclude recent projects
+    // When searching, show all matches; otherwise exclude pinned projects
     if (searchTerm) {
       return filtered;
     }
     
-    const recentIdSet = new Set(recentIds);
-    return filtered.filter(p => !recentIdSet.has(p.id));
-  }, [projects, searchTerm, recentIds]);
+    const pinnedIdSet = new Set(pinnedIds);
+    return filtered.filter(p => !pinnedIdSet.has(p.id));
+  }, [projects, searchTerm, pinnedIds]);
 
   // Pagination Slice
   const displayedProjects = useMemo(() => {
@@ -156,7 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div
-      className={`h-full glass border-r border-white/20 flex flex-col flex-shrink-0 z-20 transition-all duration-300 relative group ease-in-out ${isCollapsed ? 'w-[72px]' : 'w-72'}`}
+      className={`h-full bg-[#FDFCFB] border-r border-stone-200 flex flex-col flex-shrink-0 z-20 transition-all duration-300 relative group ease-in-out shadow-sm ${isCollapsed ? 'w-[72px]' : 'w-72'}`}
     >
       {/* Header - Height 64px (h-16) for standard alignment */}
       <div className={`h-16 flex items-center border-b border-stone-200/50 shrink-0 transition-all relative ${isCollapsed ? 'justify-center px-0' : 'justify-between px-5'}`}>
@@ -236,20 +240,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Main Nav (Scrollable) */}
       <div className={`flex-1 overflow-y-auto px-2 space-y-0.5 ${isCollapsed ? 'scrollbar-hide' : ''}`}>
-        {/* Quick Access - Recent Projects (hide when searching) */}
-        {!isCollapsed && !searchTerm && recentProjects.length > 0 && (
+        {/* Pinned Projects (hide when searching) */}
+        {!isCollapsed && !searchTerm && pinnedProjects.length > 0 && (
           <>
             <div className="px-3 py-2 mt-2">
               <p className="text-[10px] font-heading font-bold text-clay-600 uppercase tracking-wider flex items-center gap-1.5">
-                <Clock className="w-3 h-3" />
-                Quick Access
+                <Pin className="w-3 h-3" />
+                Pinned ({pinnedProjects.length}/{MAX_PINNED})
               </p>
             </div>
-            {recentProjects.map((project) => {
+            {pinnedProjects.map((project) => {
               const isActive = currentProjectId === project.id && currentView === 'workspace';
               return (
                 <div
-                  key={`recent-${project.id}`}
+                  key={`pinned-${project.id}`}
                   className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive
                     ? 'bg-clay-100 text-stone-900 border-l-2 border-clay-500'
                     : 'text-stone-600 hover:bg-clay-50 hover:text-stone-900 border-l-2 border-transparent'
@@ -258,15 +262,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={() => onSelectProject(project.id)}
                     onDoubleClick={() => startEditing(project)}
-                    className={`flex items-center font-medium h-9 font-sans w-full gap-3 px-3 text-sm pr-8 ${isActive ? 'pl-5 font-semibold' : ''}`}
+                    className={`flex items-center font-medium h-9 font-sans w-full gap-3 px-3 text-sm pr-16 ${isActive ? 'pl-5 font-semibold' : ''}`}
                   >
-                    <Clock className={`flex-shrink-0 w-3.5 h-3.5 transition-colors ${isActive ? 'text-clay-600' : 'text-clay-400 group-hover:text-clay-500'}`} />
+                    <Pin className={`flex-shrink-0 w-3.5 h-3.5 transition-colors ${isActive ? 'text-clay-600' : 'text-clay-400 group-hover:text-clay-500'}`} />
                     <span className="truncate text-left flex-1">{project.name}</span>
                     {project.jobs.length > 0 && (
                       <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-clay-200 text-clay-700' : 'bg-clay-100 text-clay-500 group-hover:text-clay-600'}`}>
                         {project.jobs.length}
                       </span>
                     )}
+                  </button>
+                  {/* Unpin button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePin(project.id);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-clay-400 hover:text-clay-600 hover:bg-clay-50 rounded-md opacity-0 group-hover:opacity-100 transition-all z-10"
+                    title="Unpin"
+                  >
+                    <PinOff className="w-3 h-3" />
                   </button>
                 </div>
               );
@@ -330,7 +345,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         title={isCollapsed ? project.name : undefined}
                         className={`
                                             flex items-center font-medium h-9 font-sans
-                                            ${isCollapsed ? 'justify-center w-9 p-0 rounded-lg' : 'w-full gap-3 px-3 text-sm pr-8'}
+                                            ${isCollapsed ? 'justify-center w-9 p-0 rounded-lg' : 'w-full gap-3 px-3 text-sm pr-16'}
                                             ${isActive && !isCollapsed ? 'pl-5 font-semibold' : ''} 
                                         `}
                       >
@@ -347,16 +362,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </button>
 
                       {!isCollapsed && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteProject(project.id);
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-stone-300 hover:text-red-600 hover:bg-red-50 rounded-md opacity-0 group-hover:opacity-100 transition-all z-10"
-                          title="Delete Session"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all z-10">
+                          {/* Pin button */}
+                          {!isPinned(project.id) && pinnedIds.length < MAX_PINNED && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePin(project.id);
+                              }}
+                              className="p-1.5 text-stone-300 hover:text-clay-600 hover:bg-clay-50 rounded-md transition-colors"
+                              title="Pin to top"
+                            >
+                              <Pin className="w-3 h-3" />
+                            </button>
+                          )}
+                          {/* Delete button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteProject(project.id);
+                            }}
+                            className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                            title="Delete Session"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
                     </>
                   )}

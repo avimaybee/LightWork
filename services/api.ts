@@ -180,7 +180,7 @@ export const api = {
                     'Content-Type': 'application/json',
                     ...authHeaders
                 },
-                body: JSON.stringify({ name, prompt })
+                body: JSON.stringify({ name, systemPrompt: prompt, userPrompt: '' })
             });
             if (!res.ok) throw new Error("Failed to create module");
             return await res.json();

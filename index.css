@@ -54,7 +54,15 @@
 
 @layer utilities {
 	.glass {
-		@apply bg-white/10 backdrop-blur-md border border-white/20;
+		@apply bg-[#FDFCFB]/85 backdrop-blur-xl border border-stone-200/60 shadow-lg;
+	}
+
+	.glass-dark {
+		@apply bg-stone-900/90 backdrop-blur-xl border border-stone-700/50 shadow-lg;
+	}
+
+	.section-outline {
+		@apply border border-stone-200 rounded-xl bg-white/50;
 	}
 
 	.content-auto {

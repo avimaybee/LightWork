@@ -25,20 +25,20 @@ export const BulkActionToolbar: React.FC<BulkActionToolbarProps> = ({
     const count = selectedJobs.length;
     
     // Count by status
-    const completedCount = selectedJobs.filter(j => j.status === 'complete').length;
-    const queuedCount = selectedJobs.filter(j => j.status === 'queued' || j.status === 'paused').length;
+    const completedCount = selectedJobs.filter(j => j.status === 'completed').length;
+    const queuedCount = selectedJobs.filter(j => j.status === 'queued' || j.status === 'paused' || j.status === 'error').length;
     const errorCount = selectedJobs.filter(j => j.status === 'error').length;
     
     // Show download only if there are completed jobs
     const canDownload = completedCount > 0;
-    // Show process only if there are queued jobs
+    // Show process only if there are queued/error jobs
     const canProcess = queuedCount > 0 && !isProcessing;
     // Show reset only if there are errors
     const canReset = errorCount > 0;
 
     return (
         <AnimatePresence>
-            {count > 1 && (
+            {count >= 1 && (
                 <motion.div
                     initial={{ opacity: 0, y: 20, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}

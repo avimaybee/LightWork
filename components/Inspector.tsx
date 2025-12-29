@@ -45,7 +45,7 @@ export const Inspector: React.FC<InspectorProps> = ({
     onRetry,
     onZoom
 }) => {
-    const { ConfirmDialog, confirm } = useConfirmDialog();
+    const { ConfirmDialogComponent: ConfirmDialog, confirm } = useConfirmDialog();
     const [isEnhancing, setIsEnhancing] = useState(false);
     const [isAutoDrafting, setIsAutoDrafting] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
