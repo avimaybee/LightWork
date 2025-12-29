@@ -7,7 +7,7 @@ import { Lightbox } from './components/Lightbox';
 import { Onboarding } from './components/Onboarding';
 import { ModulesManager } from './components/ModulesManager';
 import { ToastContainer, ToastMsg } from './components/Toast';
-import { AuthModal } from './components/AuthModal';
+import { LandingPage, AuthModal } from './components/LandingPage';
 import { BatchStatusPanel } from './components/BatchStatusPanel';
 import { AuthProvider, useAuth } from './services/authContext';
 import { Project, ImageJob, ProcessingStatus, DEFAULT_MODULES, Module, AppModel, ApiMode } from './types';
@@ -414,7 +414,7 @@ function AppContent() {
 
                                 <div className="h-4 w-px bg-stone-300/50 hidden sm:block" />
 
-                                <div className="flex items-center gap-2 hidden sm:flex">
+                                <div className="items-center gap-2 hidden sm:flex">
                                     {['all', 'ready', 'done', 'failed'].map(f => {
                                         if (f === 'failed' && stats.failed === 0) return null;
                                         return (
@@ -547,7 +547,7 @@ function AuthenticatedApp() {
 
     // Show auth modal if not logged in
     if (!user) {
-        return <AuthModal isOpen={true} />;
+        return <LandingPage />;
     }
 
     // Show main app content

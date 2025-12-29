@@ -52,8 +52,6 @@ export const generateThumbnail = async (file: File, width: number = 200): Promis
 
 /**
  * Compress image for AI processing to reduce token consumption.
- * Gemini breaks images into 768x768 tiles, each ~258 tokens.
- * A 12MP image can consume thousands of tokens instantly.
  * This resizes to max 1536px which fits in ~4 tiles (~1000 tokens).
  */
 export const compressImageForAI = async (file: File | Blob, maxSize: number = 1536): Promise<string> => {
