@@ -178,7 +178,7 @@ export async function onRequestGet(context: { request: Request; env: Env; params
                 const geminiBatch = await ai.batches.get({ name: batchJob.gemini_batch_name });
 
                 const geminiStateName = (geminiBatch as any).state?.name ?? (geminiBatch as any).state;
-                console.log(`[Batch Status] Gemini state: ${geminiStateName}`);
+                console.log(`[Batch Status] Gemini state: ${geminiStateName}, batch name: ${batchJob.gemini_batch_name}`);
 
                 // Map Gemini state to our status
                 const stateMap: Record<string, string> = {
@@ -200,9 +200,15 @@ export async function onRequestGet(context: { request: Request; env: Env; params
                 status = newStatus;
 
                 // If succeeded, process results
-                // Per Gemini Batch API docs: inline results are in `dest.inlined_responses`.
-                if (newStatus === 'succeeded' && (geminiBatch as any).dest?.inlined_responses) {
-                    await processResults(context.env, batchId, (geminiBatch as any).dest.inlined_responses);
+                // Note: Google GenAI SDK v1.34+ returns camelCase properties (inlinedResponses, not inlined_responses)
+                if (newStatus === 'succeeded') {
+                    const responses = (geminiBatch as any).dest?.inlinedResponses;
+                    if (responses && responses.length > 0) {
+                        console.log(`[Batch Status] Processing ${responses.length} inlined responses`);
+                        await processResults(context.env, batchId, responses);
+                    } else {
+                        console.warn(`[Batch Status] Batch succeeded but no inlinedResponses found. dest keys: ${Object.keys((geminiBatch as any).dest ?? {}).join(', ')}`);
+                    }
                 }
 
                 // If cancelled, mark finalized
@@ -288,7 +294,10 @@ async function processResults(env: Env, batchId: string, responses: any[]) {
             "SELECT * FROM batch_items WHERE batch_id = ? AND result_data = ?"
         ).bind(batchId, JSON.stringify({ order: idx })).first();
 
-        if (!item) continue;
+        if (!item) {
+            console.warn(`[Batch Results] No matching batch_item found for index ${idx}`);
+            continue;
+        }
 
         try {
             // Check for error
@@ -313,6 +322,9 @@ async function processResults(env: Env, batchId: string, responses: any[]) {
                 await env.DB.prepare(
                     "UPDATE batch_items SET status = 'failed', error_msg = 'No image in response' WHERE id = ?"
                 ).bind(item.id).run();
+                await env.DB.prepare(
+                    "UPDATE images SET status = 'error', error_msg = 'No image in batch response' WHERE id = ?"
+                ).bind(item.image_id).run();
                 failedCount++;
                 continue;
             }
@@ -343,6 +355,10 @@ async function processResults(env: Env, batchId: string, responses: any[]) {
 
         } catch (itemError: any) {
             console.error(`[Batch Results] Error processing item ${item.id}:`, itemError);
+            // Update images table to error state
+            await env.DB.prepare(
+                "UPDATE images SET status = 'error', error_msg = 'Batch result processing error' WHERE id = ?"
+            ).bind(item.image_id).run();
             failedCount++;
         }
     }
