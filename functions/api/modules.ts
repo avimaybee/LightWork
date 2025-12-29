@@ -1,5 +1,14 @@
 
 import { getAuthContext } from '../lib/auth';
+import { createModuleSchema, validateRequest } from '../lib/validation';
+
+// Helper for consistent JSON responses
+function jsonResponse(data: any, status: number = 200) {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: { 'Content-Type': 'application/json' }
+    });
+}
 
 export async function onRequestGet(context: any) {
     try {
@@ -46,26 +55,29 @@ export async function onRequestPost(context: any) {
         const auth = await getAuthContext(context.request);
 
         if (!auth.userId) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401,
-                headers: { 'Content-Type': 'application/json' }
-            });
+            return jsonResponse({ error: 'Unauthorized' }, 401);
         }
 
-        const { name, prompt } = await context.request.json();
+        const rawBody = await context.request.json();
+        
+        // Validate input with Zod schema
+        const validation = validateRequest(createModuleSchema, rawBody);
+        if (!validation.success) {
+            return jsonResponse({ error: validation.error }, 400);
+        }
+        
+        const { name, systemPrompt, userPrompt } = validation.data;
         const id = crypto.randomUUID();
+        
+        // Combine system and user prompts for storage
+        const prompt = systemPrompt + (userPrompt ? '\n\n' + userPrompt : '');
 
         await context.env.DB.prepare(
             "INSERT INTO modules (id, user_id, name, prompt, category) VALUES (?, ?, ?, ?, ?)"
         ).bind(id, auth.userId, name, prompt, 'custom').run();
 
-        return new Response(JSON.stringify({ id, name, prompt, isCustom: true }), {
-            headers: { 'Content-Type': 'application/json' }
-        });
+        return jsonResponse({ id, name, prompt, isCustom: true });
     } catch (e: any) {
-        return new Response(JSON.stringify({ error: e.message }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' }
-        });
+        return jsonResponse({ error: e.message }, 500);
     }
 }

@@ -1,6 +1,12 @@
 
+type ThumbnailResult = {
+    dataUrl: string;
+    width: number;
+    height: number;
+};
+
 // Thumbnail Generator (Optimized via createImageBitmap)
-export const generateThumbnail = async (file: File, width: number = 200): Promise<string> => {
+export const generateThumbnail = async (file: File, width: number = 200): Promise<ThumbnailResult> => {
     // Fast path: use createImageBitmap which is non-blocking on modern browsers
     if (typeof createImageBitmap === 'function') {
         try {
@@ -17,7 +23,11 @@ export const generateThumbnail = async (file: File, width: number = 200): Promis
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'medium';
                 ctx.drawImage(bitmap, 0, 0, width, height);
-                return canvas.toDataURL('image/jpeg', 0.7);
+                return {
+                    dataUrl: canvas.toDataURL('image/jpeg', 0.7),
+                    width: bitmap.width,
+                    height: bitmap.height,
+                };
             }
         } catch (e) {
             console.warn("createImageBitmap failed, falling back to FileReader", e);
@@ -39,9 +49,17 @@ export const generateThumbnail = async (file: File, width: number = 200): Promis
                 if (ctx) {
                     ctx.imageSmoothingEnabled = true;
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    resolve({
+                        dataUrl: canvas.toDataURL('image/jpeg', 0.7),
+                        width: img.width,
+                        height: img.height,
+                    });
                 } else {
-                    resolve(e.target?.result as string);
+                    resolve({
+                        dataUrl: e.target?.result as string,
+                        width: img.width,
+                        height: img.height,
+                    });
                 }
             };
             img.src = e.target?.result as string;

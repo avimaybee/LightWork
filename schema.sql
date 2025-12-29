@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS modules (
 
 -- Indexes for query performance
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_images_job_id ON images(job_id);
+CREATE INDEX IF NOT EXISTS idx_images_status ON images(status);
 CREATE INDEX IF NOT EXISTS idx_modules_user_id ON modules(user_id);
 
 -- Batch Jobs table (for Gemini Batch API)

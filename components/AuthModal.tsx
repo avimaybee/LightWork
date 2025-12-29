@@ -50,8 +50,8 @@ export function AuthModal({ isOpen }: AuthModalProps) {
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center">
-            {/* Backdrop with subtle grain texture */}
-            <div className="absolute inset-0 bg-[#F2F0E9]">
+            {/* Backdrop with blur and subtle grain texture */}
+            <div className="absolute inset-0 bg-[#F2F0E9]/95 backdrop-blur-sm">
                 <div
                     className="absolute inset-0 opacity-30"
                     style={{

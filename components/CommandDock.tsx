@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Project, Module, ApiMode } from '../types';
-import { Zap, Wand2, Layers, Cpu, Maximize2, Minimize2, Save, Settings, Grid, Terminal, ChevronDown, ChevronUp, Coins } from 'lucide-react';
+import { Zap, Wand2, Layers, Cpu, Maximize2, Minimize2, Save, Settings, Grid, Terminal, ChevronDown, ChevronUp, Coins, Star } from 'lucide-react';
+import { HelpTooltip, HELP_CONTENT } from './Tooltip';
 
 interface CommandDockProps {
     project: Project;
@@ -32,6 +34,56 @@ export const CommandDock: React.FC<CommandDockProps> = ({
     onManageModules
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+
+    // Core Feature #18: Favorite Modules (local)
+    const FAVORITES_KEY = 'lightwork_favorite_module_ids';
+    const loadFavorites = (): Set<string> => {
+        try {
+            const raw = localStorage.getItem(FAVORITES_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === 'string'));
+            return new Set();
+        } catch {
+            return new Set();
+        }
+    };
+    const [favoriteIds, setFavoriteIds] = useState<Set<string>>(loadFavorites);
+
+    useEffect(() => {
+        const sync = () => setFavoriteIds(loadFavorites());
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === FAVORITES_KEY) sync();
+        };
+        window.addEventListener('storage', onStorage);
+        window.addEventListener('lightwork:favorites' as any, sync as any);
+        return () => {
+            window.removeEventListener('storage', onStorage);
+            window.removeEventListener('lightwork:favorites' as any, sync as any);
+        };
+    }, []);
+
+    const saveFavorites = (next: Set<string>) => {
+        try {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(next)));
+        } catch {
+            // ignore
+        }
+        setFavoriteIds(new Set(next));
+        try {
+            window.dispatchEvent(new Event('lightwork:favorites'));
+        } catch {
+            // ignore
+        }
+    };
+
+    const toggleFavorite = (id: string) => {
+        const next = new Set(favoriteIds);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        saveFavorites(next);
+    };
+
+    const isFavorite = (id: string) => favoriteIds.has(id);
 
     // Custom Dropdown State
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -67,11 +119,42 @@ export const CommandDock: React.FC<CommandDockProps> = ({
         setIsDropdownOpen(false);
     };
 
+    const systemModules = modules
+        .filter(m => !m.isCustom)
+        .slice()
+        .sort((a, b) => {
+            const af = isFavorite(a.id);
+            const bf = isFavorite(b.id);
+            if (af !== bf) return af ? -1 : 1;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+
+    const customModules = modules
+        .filter(m => m.isCustom)
+        .slice()
+        .sort((a, b) => {
+            const af = isFavorite(a.id);
+            const bf = isFavorite(b.id);
+            if (af !== bf) return af ? -1 : 1;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+
     return (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-auto max-w-6xl z-50 flex flex-col items-center font-sans">
+        <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30, delay: 0.1 }}
+            className="absolute bottom-8 left-1/2 -translate-x-1/2 w-auto max-w-6xl z-50 flex flex-col items-center font-sans"
+        >
             {/* Expanded System Context */}
+            <AnimatePresence>
             {isExpanded && (
-                <div className="w-full bg-[#FDFCFB]/95 backdrop-blur-xl border border-stone-200 border-b-0 rounded-t-xl p-6 animate-in slide-in-from-bottom-2 shadow-2xl shadow-stone-900/10 mb-[-12px] pb-8 z-0">
+                <motion.div
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    className="w-full glass border-b-0 rounded-t-xl p-6 shadow-2xl shadow-stone-900/10 mb-[-12px] pb-8 z-0">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <div className="p-1.5 bg-stone-100 rounded-md">
@@ -100,11 +183,12 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                         placeholder="Enter detailed global instructions here..."
                         autoFocus
                     />
-                </div>
+                </motion.div>
             )}
+            </AnimatePresence>
 
             {/* Main Control Bar */}
-            <div className="bg-[#FDFCFB] border border-stone-200 shadow-2xl shadow-stone-900/10 rounded-2xl px-4 py-3 flex items-end gap-4 transition-all relative z-10">
+            <div className="glass shadow-2xl shadow-stone-900/10 rounded-2xl px-4 py-3 flex items-end gap-4 transition-all relative z-10">
 
                 {/* Toggle Expand */}
                 <button
@@ -117,7 +201,10 @@ export const CommandDock: React.FC<CommandDockProps> = ({
 
                 {/* SECTION: MODEL */}
                 <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest font-heading pl-1">Model</span>
+                    <div className="flex items-center gap-1.5 pl-1">
+                        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest font-heading">Model</span>
+                        <HelpTooltip content={project.selectedMode === 'pro' ? HELP_CONTENT.MODEL_PRO : HELP_CONTENT.MODEL_FAST} />
+                    </div>
                     <div className="flex bg-stone-100 p-1 rounded-xl h-10 items-center">
                         <button
                             onClick={() => onUpdateProject({ selectedMode: 'fast' })}
@@ -140,7 +227,10 @@ export const CommandDock: React.FC<CommandDockProps> = ({
 
                 {/* SECTION: API MODE */}
                 <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest font-heading pl-1">Speed</span>
+                    <div className="flex items-center gap-1.5 pl-1">
+                        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest font-heading">Speed</span>
+                        <HelpTooltip content={apiMode === 'economy' ? HELP_CONTENT.SPEED_ECONOMY : HELP_CONTENT.SPEED_FAST} />
+                    </div>
                     <div className="flex bg-stone-100 p-1 rounded-xl h-10 items-center">
                         <button
                             onClick={() => onApiModeChange('fast')}
@@ -163,7 +253,10 @@ export const CommandDock: React.FC<CommandDockProps> = ({
 
                 {/* SECTION: MODULE */}
                 <div className="flex flex-col gap-1.5 relative" ref={dropdownRef}>
-                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest font-heading pl-1">Module</span>
+                    <div className="flex items-center gap-1.5 pl-1">
+                        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest font-heading">Module</span>
+                        <HelpTooltip content={HELP_CONTENT.MODULE} />
+                    </div>
 
                     {/* Dropdown Button */}
                     <button
@@ -184,7 +277,7 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                                 <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest pl-1">System Presets</span>
                             </div>
                             <div className="max-h-64 overflow-y-auto p-1.5">
-                                {modules.filter(m => !m.isCustom).map(m => (
+                                {systemModules.map(m => (
                                     <button
                                         key={m.id}
                                         onClick={() => handleSelectModule(m)}
@@ -194,7 +287,16 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                                             <Terminal className="w-4 h-4 text-stone-400" />
                                             <span className="font-heading text-sm">{m.name}</span>
                                         </div>
-                                        {project.selectedModulePreset === m.id && <div className="w-1.5 h-1.5 rounded-full bg-stone-900" />}
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); toggleFavorite(m.id); }}
+                                                className={`p-1 rounded-md transition-colors ${isFavorite(m.id) ? 'text-clay-600 hover:bg-clay-50' : 'text-stone-300 hover:text-stone-600 hover:bg-stone-50'}`}
+                                                title={isFavorite(m.id) ? 'Unfavorite' : 'Favorite'}
+                                            >
+                                                <Star className="w-4 h-4" fill={isFavorite(m.id) ? 'currentColor' : 'none'} />
+                                            </button>
+                                            {project.selectedModulePreset === m.id && <div className="w-1.5 h-1.5 rounded-full bg-stone-900" />}
+                                        </div>
                                     </button>
                                 ))}
                             </div>
@@ -204,12 +306,12 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                             </div>
 
                             <div className="max-h-48 overflow-y-auto p-1.5">
-                                {modules.filter(m => m.isCustom).length === 0 && (
+                                {customModules.length === 0 && (
                                     <div className="px-3 py-4 text-center text-[10px] text-stone-400 italic">
                                         No custom modules yet
                                     </div>
                                 )}
-                                {modules.filter(m => m.isCustom).map(m => (
+                                {customModules.map(m => (
                                     <button
                                         key={m.id}
                                         onClick={() => handleSelectModule(m)}
@@ -219,7 +321,16 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                                             <Grid className="w-4 h-4 text-clay-500" />
                                             <span className="font-heading">{m.name}</span>
                                         </div>
-                                        {project.selectedModulePreset === m.id && <div className="w-1.5 h-1.5 rounded-full bg-clay-500" />}
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); toggleFavorite(m.id); }}
+                                                className={`p-1 rounded-md transition-colors ${isFavorite(m.id) ? 'text-clay-600 hover:bg-clay-50' : 'text-stone-300 hover:text-stone-600 hover:bg-stone-50'}`}
+                                                title={isFavorite(m.id) ? 'Unfavorite' : 'Favorite'}
+                                            >
+                                                <Star className="w-4 h-4" fill={isFavorite(m.id) ? 'currentColor' : 'none'} />
+                                            </button>
+                                            {project.selectedModulePreset === m.id && <div className="w-1.5 h-1.5 rounded-full bg-clay-500" />}
+                                        </div>
                                     </button>
                                 ))}
                             </div>
@@ -241,7 +352,10 @@ export const CommandDock: React.FC<CommandDockProps> = ({
 
                 {/* SECTION: PROMPT */}
                 <div className="flex flex-col gap-1.5 flex-1 min-w-[320px]">
-                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest font-heading pl-1">Modification Instructions</span>
+                    <div className="flex items-center gap-1.5 pl-1">
+                        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest font-heading">Instructions</span>
+                        <HelpTooltip content={HELP_CONTENT.MODIFICATION_INSTRUCTIONS} />
+                    </div>
                     <div className="relative group">
                         {isExpanded ? (
                             <button
@@ -312,6 +426,6 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                 </div>
 
             </div>
-        </div>
+        </motion.div>
     );
 };

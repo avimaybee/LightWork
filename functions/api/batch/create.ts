@@ -1,30 +1,36 @@
 // POST /api/batch/create - Create a batch job from queued images
 import { getAuthContext } from '../../lib/auth';
+import { createBatchSchema, validateRequest } from '../../lib/validation';
 
 interface Env {
     DB: D1Database;
     STORAGE: R2Bucket;
 }
 
+// Helper for consistent JSON responses
+function jsonResponse(data: any, status: number = 200) {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: { 'Content-Type': 'application/json' }
+    });
+}
+
 export async function onRequestPost(context: { request: Request; env: Env }) {
     try {
         const auth = await getAuthContext(context.request);
         if (!auth.userId) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401,
-                headers: { 'Content-Type': 'application/json' }
-            });
+            return jsonResponse({ error: 'Unauthorized' }, 401);
         }
 
-        const body = await context.request.json();
-        const { projectId, model } = body;
-
-        if (!projectId) {
-            return new Response(JSON.stringify({ error: 'Project ID required' }), {
-                status: 400,
-                headers: { 'Content-Type': 'application/json' }
-            });
+        const rawBody = await context.request.json();
+        
+        // Validate input with Zod schema
+        const validation = validateRequest(createBatchSchema, rawBody);
+        if (!validation.success) {
+            return jsonResponse({ error: validation.error }, 400);
         }
+        
+        const { projectId, model } = validation.data;
 
         // Verify project ownership
         const project = await context.env.DB.prepare(

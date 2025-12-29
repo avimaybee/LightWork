@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Project } from '../types';
-import { Plus, Settings, Command, Key, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, Box, LogOut, User } from 'lucide-react';
+import { Plus, Settings, Command, Key, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, Box, LogOut, User, Loader2 } from 'lucide-react';
 import { useAuth } from '../services/authContext';
 
 interface SidebarProps {
   projects: Project[];
   currentProjectId: string;
   onSelectProject: (id: string) => void;
-  onCreateProject: () => void;
+  onCreateProject: () => Promise<void>;
   onRenameProject?: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
   currentView: 'workspace' | 'modules';
@@ -31,9 +31,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   const observerTarget = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Handle create project with loading state
+  const handleCreateProject = async () => {
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      await onCreateProject();
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   // Search Filter
   const filteredProjects = useMemo(() => {
@@ -93,7 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div
-      className={`h-full bg-[#FDFCFB] border-r border-stone-200 flex flex-col flex-shrink-0 z-20 transition-all duration-300 relative group ease-in-out ${isCollapsed ? 'w-[72px]' : 'w-72'}`}
+      className={`h-full glass border-r border-white/20 flex flex-col flex-shrink-0 z-20 transition-all duration-300 relative group ease-in-out ${isCollapsed ? 'w-[72px]' : 'w-72'}`}
     >
       {/* Header - Height 64px (h-16) for standard alignment */}
       <div className={`h-16 flex items-center border-b border-stone-200/50 shrink-0 transition-all relative ${isCollapsed ? 'justify-center px-0' : 'justify-between px-5'}`}>
@@ -123,17 +135,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Primary Actions */}
       <div className={`p-4 shrink-0 space-y-1.5 flex flex-col border-b border-stone-100/50 ${isCollapsed ? 'items-center px-2' : ''}`}>
         <button
-          onClick={onCreateProject}
+          onClick={handleCreateProject}
+          disabled={isCreating}
           title="New Session"
           className={`
-            flex items-center rounded-lg font-heading font-medium text-stone-900 bg-white border border-stone-200 shadow-sm hover:border-stone-300 hover:shadow-md transition-all group h-9
+            flex items-center rounded-lg font-heading font-medium text-stone-900 bg-white border border-stone-200 shadow-sm hover:border-stone-300 hover:shadow-md transition-all group h-9 disabled:opacity-50 disabled:cursor-not-allowed
             ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}
           `}
         >
           <div className="w-4 h-4 flex items-center justify-center shrink-0">
-            <Plus className="w-4 h-4 text-stone-500 group-hover:text-stone-900 transition-colors" />
+            {isCreating ? (
+              <Loader2 className="w-4 h-4 text-stone-500 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4 text-stone-500 group-hover:text-stone-900 transition-colors" />
+            )}
           </div>
-          {!isCollapsed && <span>New Session</span>}
+          {!isCollapsed && <span>{isCreating ? 'Creating...' : 'New Session'}</span>}
         </button>
 
         <button
@@ -293,7 +310,7 @@ function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
           className="w-9 h-9 rounded-full bg-gradient-to-br from-clay-400 to-clay-600 flex items-center justify-center text-white font-heading font-bold text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all"
         >
           {user.photoURL ? (
-            <img src={user.photoURL} alt="" className="w-full h-full rounded-full object-cover" />
+            <img src={user.photoURL} alt="" className="w-full h-full rounded-full object-cover" loading="lazy" decoding="async" />
           ) : (
             userInitial.toUpperCase()
           )}
@@ -308,7 +325,7 @@ function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
       <div className="flex items-center gap-3 px-2">
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-clay-400 to-clay-600 flex items-center justify-center text-white font-heading font-bold text-sm shadow-md shrink-0">
           {user.photoURL ? (
-            <img src={user.photoURL} alt="" className="w-full h-full rounded-full object-cover" />
+            <img src={user.photoURL} alt="" className="w-full h-full rounded-full object-cover" loading="lazy" decoding="async" />
           ) : (
             userInitial.toUpperCase()
           )}

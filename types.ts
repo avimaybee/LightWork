@@ -71,6 +71,13 @@ export interface ImageJob {
   retryCount: number;
   timestamp: number;
 
+  // Optional dimensions (used for stable aspect-ratio layouts)
+  width?: number;
+  height?: number;
+
+  // Upload UI
+  uploadProgress?: number; // 0..100
+
   // Interaction
   selected?: boolean;
 }

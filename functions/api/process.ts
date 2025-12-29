@@ -1,6 +1,14 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { getAuthContext } from '../lib/auth';
+import { processRequestSchema, validateRequest } from '../lib/validation';
+
+interface Env {
+    DB: D1Database;
+    STORAGE: R2Bucket;
+    GEMINI_API_KEY: string;
+    CACHE_KV?: KVNamespace;
+}
 
 // Helper for consistent JSON responses with proper headers
 function jsonResponse(data: any, status: number = 200, extraHeaders?: Record<string, string>) {
@@ -46,7 +54,14 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     return btoa(binary);
 }
 
-export async function onRequestPost(context) {
+async function sha256Hex(input: string): Promise<string> {
+    const data = new TextEncoder().encode(input);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function onRequestPost(context: { request: Request; env: Env }) {
     let jobId: string | null = null;
     let requestId: string | null = null;
 
@@ -56,7 +71,15 @@ export async function onRequestPost(context) {
             return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
         }
 
-        const body = await context.request.json();
+        const rawBody = await context.request.json();
+        
+        // Validate input with Zod schema
+        const validation = validateRequest(processRequestSchema, rawBody);
+        if (!validation.success) {
+            return jsonResponse({ success: false, error: validation.error }, 400);
+        }
+        
+        const body = validation.data;
         requestId = body.requestId || null;
         jobId = body.jobId;
         const { model, systemPrompt, userPrompt, compressedImageData } = body;
@@ -140,6 +163,43 @@ export async function onRequestPost(context) {
         const fullPrompt = `${systemPrompt}\n\n${userPrompt || ''}`.trim();
         console.log("[Process API] Prompt length:", fullPrompt.length);
 
+        // 3.5 Smart cache: if we already processed the same image+prompt, reuse the result
+        const cacheEnabled = !!context.env.CACHE_KV;
+        let cacheKvKey: string | null = null;
+        let cachedResultKey: string | null = null;
+        let cacheR2ResultKey: string | null = null;
+
+        if (cacheEnabled) {
+            const hash = await sha256Hex(`${modelName}\n${imageRecord.r2_key_original}\n${fullPrompt}`);
+            cacheKvKey = `imgcache:${hash}`;
+            cacheR2ResultKey = `cache/${hash}.png`;
+
+            try {
+                cachedResultKey = await context.env.CACHE_KV!.get(cacheKvKey);
+            } catch {
+                cachedResultKey = null;
+            }
+
+            if (cachedResultKey) {
+                const cachedObj = await context.env.STORAGE.get(cachedResultKey);
+                if (cachedObj) {
+                    const ab = await cachedObj.arrayBuffer();
+                    const cachedImageBytes = arrayBufferToBase64(ab);
+
+                    await context.env.DB.prepare(
+                        "UPDATE images SET status = ?, r2_key_result = ?, error_msg = NULL WHERE id = ?"
+                    ).bind('completed', cachedResultKey, jobId).run();
+
+                    console.log("[Process API] Cache hit:", { jobId, cachedResultKey });
+                    return jsonResponse({ success: true, imageBytes: cachedImageBytes, requestId, cached: true });
+                } else {
+                    // Stale cache entry
+                    try { await context.env.CACHE_KV!.delete(cacheKvKey); } catch {}
+                    cachedResultKey = null;
+                }
+            }
+        }
+
         // 4. Call Gemini API
         console.log("[Process API] Calling Gemini API...");
 
@@ -195,7 +255,7 @@ export async function onRequestPost(context) {
         // 6. Save Result to R2
         const imageBytes = imagePart.inlineData.data;
 
-        const resultKey = `result-${jobId}.png`;
+        const resultKey = (cacheEnabled && cacheR2ResultKey) ? cacheR2ResultKey : `result-${jobId}.png`;
         const binaryString = atob(imageBytes);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -208,8 +268,17 @@ export async function onRequestPost(context) {
         });
         console.log("[Process API] Result saved to R2:", resultKey);
 
+        // Store cache mapping for future runs
+        if (cacheEnabled && cacheKvKey) {
+            try {
+                await context.env.CACHE_KV!.put(cacheKvKey, resultKey, { expirationTtl: 60 * 60 * 24 * 30 });
+            } catch {
+                // ignore cache write failures
+            }
+        }
+
         // 7. Update DB
-        await context.env.DB.prepare("UPDATE images SET status = ?, r2_key_result = ? WHERE id = ?")
+        await context.env.DB.prepare("UPDATE images SET status = ?, r2_key_result = ?, error_msg = NULL WHERE id = ?")
             .bind('completed', resultKey, jobId).run();
 
         // Return bytes to frontend for immediate display

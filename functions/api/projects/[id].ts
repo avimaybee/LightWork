@@ -1,6 +1,25 @@
 
 import { getAuthContext } from '../../lib/auth';
 
+async function moveR2KeyToTrash(storage: R2Bucket, key: string, now: number) {
+  if (!key) return;
+  const obj = await storage.get(key);
+  if (!obj) return;
+
+  const date = new Date(now).toISOString().slice(0, 10);
+  const trashKey = `trash/${date}/${now}-${key}`;
+
+  await storage.put(trashKey, obj.body, {
+    httpMetadata: obj.httpMetadata,
+    customMetadata: {
+      trashed_from: key,
+      trashed_at: String(now)
+    }
+  });
+
+  await storage.delete(key);
+}
+
 export async function onRequestPatch(context: any) {
   try {
     const auth = await getAuthContext(context.request);
@@ -78,22 +97,36 @@ export async function onRequestDelete(context: any) {
       });
     }
 
-    // 1. Get images to delete from R2
-    const images = await context.env.DB.prepare("SELECT r2_key_original, r2_key_result FROM images WHERE job_id = ?").bind(id).all();
+    const now = Date.now();
 
-    // 2. Delete from R2
-    const keysToDelete: string[] = [];
+    // 1. Get images to delete from R2
+    const images = await context.env.DB
+      .prepare("SELECT r2_key_original, r2_key_result FROM images WHERE job_id = ?")
+      .bind(id)
+      .all();
+
+    // 2. Move to Trash in R2 (lifecycle can purge trash/ after 30 days)
+    const keysToTrash = new Set<string>();
     images.results.forEach((img: any) => {
-      if (img.r2_key_original) keysToDelete.push(img.r2_key_original);
-      if (img.r2_key_result) keysToDelete.push(img.r2_key_result);
+      if (img.r2_key_original) keysToTrash.add(img.r2_key_original);
+      if (img.r2_key_result) keysToTrash.add(img.r2_key_result);
     });
 
-    if (keysToDelete.length > 0) {
-      await Promise.all(keysToDelete.map(key => context.env.STORAGE.delete(key)));
+    if (keysToTrash.size > 0) {
+      await Promise.allSettled(
+        Array.from(keysToTrash).map((key) => moveR2KeyToTrash(context.env.STORAGE, key, now))
+      );
     }
 
-    // 3. Delete from DB
+    // 3. Delete from DB in a single transactional batch (prevents orphaned rows)
     await context.env.DB.batch([
+      // Batch tables (delete items first)
+      context.env.DB.prepare(
+        "DELETE FROM batch_items WHERE batch_id IN (SELECT id FROM batch_jobs WHERE project_id = ?)"
+      ).bind(id),
+      context.env.DB.prepare("DELETE FROM batch_jobs WHERE project_id = ?").bind(id),
+
+      // Images + project
       context.env.DB.prepare("DELETE FROM images WHERE job_id = ?").bind(id),
       context.env.DB.prepare("DELETE FROM jobs WHERE id = ?").bind(id)
     ]);

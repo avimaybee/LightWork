@@ -129,6 +129,7 @@ export const Lightbox: React.FC<LightboxProps> = ({ isOpen, onClose, imageUrl, o
                  <img 
                     src={originalUrl} 
                     alt="Original (Flash)" 
+                    decoding="async"
                     className="max-w-none shadow-2xl ring-1 ring-white/10"
                     style={{ 
                         transform: `scale(${zoom})`,
@@ -144,6 +145,7 @@ export const Lightbox: React.FC<LightboxProps> = ({ isOpen, onClose, imageUrl, o
              <img 
                 src={imageUrl} 
                 alt="Full screen" 
+                decoding="async"
                 className="max-w-none transition-transform duration-200 ease-out shadow-2xl ring-1 ring-white/10"
                 style={{ 
                     transform: `scale(${zoom})`,
@@ -166,6 +168,7 @@ export const Lightbox: React.FC<LightboxProps> = ({ isOpen, onClose, imageUrl, o
                 <img 
                     src={originalUrl} 
                     alt="Original" 
+                    decoding="async"
                     className="block max-h-[85vh] w-auto h-auto object-contain pointer-events-none select-none"
                 />
                 
@@ -177,6 +180,7 @@ export const Lightbox: React.FC<LightboxProps> = ({ isOpen, onClose, imageUrl, o
                     <img 
                         src={imageUrl} 
                         alt="Processed" 
+                        decoding="async"
                         className="block max-h-[85vh] w-full h-full object-contain"
                     />
                 </div>

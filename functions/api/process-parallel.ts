@@ -16,6 +16,7 @@ interface Env {
     DB: D1Database;
     STORAGE: R2Bucket;
     GEMINI_API_KEY: string;
+    CACHE_KV?: KVNamespace;
 }
 
 interface ProcessImageData {
@@ -52,6 +53,13 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     }
     
     return btoa(chunks.join(''));
+}
+
+async function sha256Hex(input: string): Promise<string> {
+    const data = new TextEncoder().encode(input);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -192,6 +200,10 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         const ai = new GoogleGenAI({ apiKey });
         const modelName = model || 'gemini-2.5-flash-image';
 
+        const cacheEnabled = !!context.env.CACHE_KV;
+        const cacheMetaByJobId = new Map<string, { kvKey: string; resultKey: string }>();
+        const cachedProcessed: { jobId: string; success: boolean; error?: string }[] = [];
+
         // Fetch images from DB and R2
         const tasks: ProcessingTask<ProcessImageData, { imageBytes: string }>[] = [];
 
@@ -220,6 +232,23 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
             const b64Data = arrayBufferToBase64(arrayBuffer);
             const mimeType = obj.httpMetadata?.contentType || 'image/jpeg';
             const fullPrompt = `${systemPrompt || imageRecord.module_prompt || ''}\n\n${imageRecord.prompt || ''}`.trim();
+
+            // Smart cache check: same (model + original key + prompt) => reuse
+            if (cacheEnabled) {
+                const hash = await sha256Hex(`${modelName}\n${imageRecord.r2_key_original}\n${fullPrompt}`);
+                const kvKey = `imgcache:${hash}`;
+                const cachedKey = await context.env.CACHE_KV!.get(kvKey);
+
+                if (cachedKey) {
+                    await context.env.DB.prepare(
+                        "UPDATE images SET status = ?, r2_key_result = ?, error_msg = NULL WHERE id = ?"
+                    ).bind('completed', cachedKey, jobId).run();
+                    cachedProcessed.push({ jobId, success: true });
+                    continue;
+                }
+
+                cacheMetaByJobId.set(jobId, { kvKey, resultKey: `cache/${hash}.png` });
+            }
 
             tasks.push({
                 id: jobId,
@@ -270,11 +299,12 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         }
 
         // Save results to R2 and update DB
-        const processed: { jobId: string; success: boolean; error?: string }[] = [];
+        const processed: { jobId: string; success: boolean; error?: string }[] = [...cachedProcessed];
 
         for (const result of results) {
             if (result.success && result.result?.imageBytes) {
-                const resultKey = `result-${result.id}.png`;
+                const cacheMeta = cacheEnabled ? cacheMetaByJobId.get(result.id) : undefined;
+                const resultKey = cacheMeta?.resultKey || `result-${result.id}.png`;
                 
                 // Decode base64 to binary
                 const binaryString = atob(result.result.imageBytes);
@@ -287,6 +317,15 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
                 await context.env.STORAGE.put(resultKey, bytes, {
                     httpMetadata: { contentType: 'image/png' }
                 });
+
+                // Store KV mapping for future runs
+                if (cacheEnabled && cacheMeta) {
+                    try {
+                        await context.env.CACHE_KV!.put(cacheMeta.kvKey, resultKey, { expirationTtl: 60 * 60 * 24 * 30 });
+                    } catch {
+                        // ignore cache write failures
+                    }
+                }
 
                 // Update DB
                 await context.env.DB.prepare(

@@ -1,8 +1,17 @@
 
 import { getAuthContext } from '../lib/auth';
+import { createProjectSchema, validateRequest } from '../lib/validation';
 
 interface Env {
   DB: D1Database;
+}
+
+// Helper for consistent JSON responses
+function jsonResponse(data: any, status: number = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
 }
 
 export async function onRequestGet(context: { request: Request; env: Env }) {
@@ -61,20 +70,25 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     const auth = await getAuthContext(context.request);
 
     if (!auth.userId) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
-    const body = await context.request.json() as { name: string };
+    const rawBody = await context.request.json();
+    
+    // Validate input with Zod schema
+    const validation = validateRequest(createProjectSchema, rawBody);
+    if (!validation.success) {
+      return jsonResponse({ error: validation.error }, 400);
+    }
+    
+    const body = validation.data;
     const id = crypto.randomUUID();
 
     await context.env.DB.prepare(
       "INSERT INTO jobs (id, user_id, name, status, created_at, module_prompt, selected_mode, selected_module_preset) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(id, auth.userId, body.name, 'active', Date.now(), '', 'fast', '').run();
 
-    return new Response(JSON.stringify({
+    return jsonResponse({
       id,
       name: body.name,
       jobs: [],
@@ -82,13 +96,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       modulePrompt: '',
       selectedMode: 'fast',
       selectedModulePreset: ''
-    }), {
-      headers: { 'Content-Type': 'application/json' }
     });
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonResponse({ error: e.message }, 500);
   }
 }

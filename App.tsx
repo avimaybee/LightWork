@@ -1,21 +1,24 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { CommandDock } from './components/CommandDock';
 import { ImageCard } from './components/ImageCard';
-import { Inspector } from './components/Inspector';
-import { Lightbox } from './components/Lightbox';
-import { Onboarding } from './components/Onboarding';
-import { ModulesManager } from './components/ModulesManager';
 import { ToastContainer, ToastMsg } from './components/Toast';
 import { LandingPage, AuthModal } from './components/LandingPage';
-import { BatchStatusPanel } from './components/BatchStatusPanel';
+import { useConfirmDialog } from './components/ConfirmDialog';
+import { EmptyState } from './components/EmptyState';
 import { AuthProvider, useAuth } from './services/authContext';
 import { Project, ImageJob, ProcessingStatus, DEFAULT_MODULES, Module, AppModel, ApiMode } from './types';
 
-import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock, Loader2 } from 'lucide-react';
-import { processImageWithGemini } from './services/geminiService';
+import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock, Loader2, FileText } from 'lucide-react';
+import { processImageWithGemini, generateSmartFilename } from './services/geminiService';
 import { generateThumbnail, wait, calculateBackoff } from './utils';
 import { api } from './services/api';
+
+const LazyInspector = React.lazy(() => import('./components/Inspector').then(m => ({ default: m.Inspector })));
+const LazyLightbox = React.lazy(() => import('./components/Lightbox').then(m => ({ default: m.Lightbox })));
+const LazyOnboarding = React.lazy(() => import('./components/Onboarding').then(m => ({ default: m.Onboarding })));
+const LazyModulesManager = React.lazy(() => import('./components/ModulesManager').then(m => ({ default: m.ModulesManager })));
+const LazyBatchStatusPanel = React.lazy(() => import('./components/BatchStatusPanel').then(m => ({ default: m.BatchStatusPanel })));
 
 // Tier 1 Optimized Settings
 // With paid Tier 1 limits (500 RPM, 500K TPM), we can process much faster
@@ -30,6 +33,9 @@ type FilterType = 'all' | 'ready' | 'done' | 'failed';
 function AppContent() {
     // --- State ---
     const [currentView, setCurrentView] = useState<AppView>('workspace');
+
+    // Confirmation Dialog Hook
+    const { confirm, ConfirmDialogComponent } = useConfirmDialog();
 
     // Modules State
     const [modules, setModules] = useState<Module[]>(DEFAULT_MODULES);
@@ -47,13 +53,23 @@ function AppContent() {
     const [filter, setFilter] = useState<FilterType>('all');
     const [apiMode, setApiMode] = useState<ApiMode>('fast');
 
+    // Interactions #7: Infinite Scroll (client-side pagination)
+    const [visibleCount, setVisibleCount] = useState(36);
+    const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
     const [isHeaderEditing, setIsHeaderEditing] = useState(false);
     const [headerTempName, setHeaderTempName] = useState('');
     const headerInputRef = useRef<HTMLInputElement>(null);
 
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
     const lastSelectedId = useRef<string | null>(null);
     const projectsRef = useRef(projects);
     const nextGeminiAllowedAtRef = useRef<number>(0);
+    const uploadProgressTimersRef = useRef<Record<string, number>>({});
+    const uploadProgressValueRef = useRef<Record<string, number>>({});
+
+    const didAutoNameProjectRef = useRef<Record<string, true>>({});
 
     useEffect(() => {
         projectsRef.current = projects;
@@ -75,7 +91,10 @@ function AppContent() {
 
                 if (fetchedProjects.length > 0) {
                     setProjects(fetchedProjects);
-                    setCurrentProjectId(fetchedProjects[0].id);
+                    // Session Persistence: restore last active project
+                    const lastProjectId = localStorage.getItem('lightwork_last_project_id');
+                    const lastProject = lastProjectId ? fetchedProjects.find(p => p.id === lastProjectId) : null;
+                    setCurrentProjectId(lastProject ? lastProject.id : fetchedProjects[0].id);
                 } else {
                     // Create default project
                     const newP = await api.createProject("Session #1");
@@ -83,6 +102,11 @@ function AppContent() {
                         setProjects([newP]);
                         setCurrentProjectId(newP.id);
                     }
+                }
+
+                // Onboarding (once per browser)
+                if (localStorage.getItem('lightwork_onboarded') !== 'true') {
+                    setShowOnboarding(true);
                 }
             } catch (e) {
                 console.error("Initialization failed", e);
@@ -108,6 +132,17 @@ function AppContent() {
         selectedModulePreset: ''
     };
 
+    // Session Persistence: save current project ID
+    useEffect(() => {
+        if (currentProjectId && currentProjectId !== 'temp') {
+            try {
+                localStorage.setItem('lightwork_last_project_id', currentProjectId);
+            } catch {
+                // ignore storage failures
+            }
+        }
+    }, [currentProjectId]);
+
     const updateCurrentProject = useCallback(async (updates: Partial<Project>) => {
         // Optimistic Update
         setProjects(prev => prev.map(p =>
@@ -126,6 +161,196 @@ function AppContent() {
             };
         }));
     }, [currentProjectId]);
+
+    // Reset infinite-scroll window when project/filter changes
+    useEffect(() => {
+        setVisibleCount(36);
+    }, [currentProjectId, filter]);
+
+    // QoL #1: Auto-save Module Prompt (local only)
+    useEffect(() => {
+        const projectId = currentProjectId;
+        if (!projectId) return;
+
+        const key = `lightwork_module_prompt_draft_${projectId}`;
+        const timer = window.setInterval(() => {
+            const fresh = projectsRef.current.find(p => p.id === projectId);
+            const prompt = (fresh?.modulePrompt ?? '').toString();
+            try {
+                localStorage.setItem(key, prompt);
+                localStorage.setItem(`${key}_ts`, String(Date.now()));
+            } catch {
+                // ignore storage failures
+            }
+        }, 5000);
+
+        return () => window.clearInterval(timer);
+    }, [currentProjectId]);
+
+    // Restore draft only when backend prompt is empty
+    useEffect(() => {
+        const projectId = currentProjectId;
+        if (!projectId) return;
+
+        const key = `lightwork_module_prompt_draft_${projectId}`;
+        let draft: string | null = null;
+        try {
+            draft = localStorage.getItem(key);
+        } catch {
+            draft = null;
+        }
+
+        if (!draft) return;
+        if ((currentProject?.modulePrompt || '').trim().length > 0) return;
+
+        setProjects(prev => prev.map(p => p.id === projectId ? { ...p, modulePrompt: draft || '' } : p));
+    }, [currentProjectId, currentProject?.modulePrompt]);
+
+    const getFilteredJobs = useCallback(() => {
+        const jobs = (projectsRef.current.find(p => p.id === currentProjectId)?.jobs || []);
+        return jobs.filter(j => {
+            if (filter === 'all') return true;
+            if (filter === 'ready') return ['queued', 'uploading', 'paused', 'retrying'].includes(j.status);
+            if (filter === 'done') return j.status === 'completed';
+            if (filter === 'failed') return j.status === 'error';
+            return true;
+        });
+    }, [currentProjectId, filter]);
+
+    const getRenderedJobs = useCallback(() => {
+        const filtered = getFilteredJobs();
+        return filtered.slice(0, visibleCount);
+    }, [getFilteredJobs, visibleCount]);
+
+    const selectAllVisible = useCallback(() => {
+        const visible = getRenderedJobs();
+        if (visible.length === 0) return;
+
+        const visibleIds = new Set(visible.map(j => j.id));
+        lastSelectedId.current = visible[visible.length - 1]?.id || null;
+
+        setProjects(prev => prev.map(p =>
+            p.id === currentProjectId
+                ? { ...p, jobs: p.jobs.map(j => ({ ...j, selected: visibleIds.has(j.id) })) }
+                : p
+        ));
+    }, [currentProjectId, getRenderedJobs]);
+
+    // QoL #2: Keyboard Shortcuts
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const active = document.activeElement as HTMLElement | null;
+            const tag = active?.tagName?.toLowerCase();
+            const isTypingTarget = tag === 'input' || tag === 'textarea' || (active?.getAttribute?.('contenteditable') === 'true');
+
+            const key = e.key.toLowerCase();
+            const isMod = e.ctrlKey || e.metaKey;
+
+            // Escape: Close lightbox or clear selection
+            if (key === 'escape' && !isTypingTarget) {
+                if (lightboxData) {
+                    setLightboxData(null);
+                } else if (selectedJobs.length > 0) {
+                    clearSelection();
+                }
+                return;
+            }
+
+            // Space: Open lightbox for first selected image
+            if (key === ' ' && !isTypingTarget && selectedJobs.length > 0) {
+                e.preventDefault();
+                const first = selectedJobs[0];
+                setLightboxData({ url: first.resultUrl || first.thumbnailUrl, original: first.originalUrl });
+                return;
+            }
+
+            // Delete/Backspace: Remove selected images
+            if ((key === 'delete' || key === 'backspace') && !isTypingTarget && selectedJobs.length > 0) {
+                e.preventDefault();
+                confirm({
+                    title: selectedJobs.length === 1 ? 'Delete Image' : `Delete ${selectedJobs.length} Images`,
+                    message: 'Are you sure you want to delete the selected images? This action cannot be undone.',
+                    confirmLabel: 'Delete',
+                    variant: 'danger',
+                }).then((confirmed) => {
+                    if (confirmed) {
+                        const ids = selectedJobs.map(j => j.id);
+                        setProjects(prev => prev.map(p =>
+                            p.id === currentProjectId
+                                ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) }
+                                : p
+                        ));
+                        clearSelection();
+                    }
+                });
+                return;
+            }
+
+            // Only process workspace-specific shortcuts in workspace view
+            if (currentView !== 'workspace') return;
+            if (isTypingTarget) return;
+
+            // Ctrl/Cmd + A: Select all visible
+            if (isMod && key === 'a') {
+                e.preventDefault();
+                selectAllVisible();
+                return;
+            }
+
+            // Ctrl/Cmd + Enter: Run batch
+            if (isMod && key === 'enter') {
+                e.preventDefault();
+                if (!isProcessing && queuedCount > 0) {
+                    if (apiMode === 'economy') {
+                        // Trigger batch processing
+                        handleProcessBatch();
+                    } else {
+                        // Trigger real-time processing
+                        processQueue();
+                    }
+                }
+                return;
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [currentView, selectAllVisible, lightboxData, selectedJobs, clearSelection, confirm, currentProjectId, isProcessing, queuedCount, apiMode, handleProcessBatch, processQueue]);
+
+    const stopUploadProgress = useCallback((jobId: string) => {
+        const timerId = uploadProgressTimersRef.current[jobId];
+        if (timerId) {
+            window.clearInterval(timerId);
+            delete uploadProgressTimersRef.current[jobId];
+        }
+        delete uploadProgressValueRef.current[jobId];
+    }, []);
+
+    const startUploadProgress = useCallback((jobId: string) => {
+        stopUploadProgress(jobId);
+        uploadProgressValueRef.current[jobId] = 0;
+
+        // Smooth-ish progress that caps at ~92% until the upload completes.
+        const timerId = window.setInterval(() => {
+            const current = uploadProgressValueRef.current[jobId] ?? 0;
+            const next = Math.min(92, current + (3 + Math.floor(Math.random() * 6)));
+            uploadProgressValueRef.current[jobId] = next;
+            updateJob(jobId, { uploadProgress: next });
+        }, 220);
+
+        uploadProgressTimersRef.current[jobId] = timerId;
+    }, [stopUploadProgress, updateJob]);
+
+    // Cleanup any active timers when unmounting
+    useEffect(() => {
+        return () => {
+            Object.keys(uploadProgressTimersRef.current).forEach(key => {
+                window.clearInterval(uploadProgressTimersRef.current[key]);
+            });
+            uploadProgressTimersRef.current = {};
+            uploadProgressValueRef.current = {};
+        };
+    }, []);
 
     // --- Logic: Header Renaming ---
     const startHeaderRename = () => {
@@ -154,7 +379,13 @@ function AppContent() {
     };
 
     const handleDeleteModule = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this module?')) return;
+        const confirmed = await confirm({
+            title: 'Delete Module',
+            message: 'Are you sure you want to delete this module? This action cannot be undone.',
+            confirmLabel: 'Delete',
+            variant: 'danger',
+        });
+        if (!confirmed) return;
         // API Call
         await api.deleteModule(id);
         setModules(prev => prev.filter(m => m.id !== id));
@@ -163,7 +394,13 @@ function AppContent() {
 
     const deleteProject = async (id: string) => {
         if (projects.length <= 1) return;
-        if (!confirm('Are you sure you want to delete this session? This cannot be undone.')) return;
+        const confirmed = await confirm({
+            title: 'Delete Session',
+            message: 'Are you sure you want to delete this session? All images will be permanently removed. This action cannot be undone.',
+            confirmLabel: 'Delete Session',
+            variant: 'danger',
+        });
+        if (!confirmed) return;
         await api.deleteProject(id);
         const newProjects = projects.filter(p => p.id !== id);
         setProjects(newProjects);
@@ -184,24 +421,63 @@ function AppContent() {
                 id: tempId,
                 file: file, // Keep file for thumbnail generation only
                 fileName: file.name,
-                thumbnailUrl: thumb,
+                thumbnailUrl: thumb.dataUrl,
                 status: 'uploading',
                 localPrompt: '',
                 retryCount: 0,
                 timestamp: Date.now(),
-                originalUrl: URL.createObjectURL(file)
+                originalUrl: URL.createObjectURL(file),
+                width: thumb.width,
+                height: thumb.height,
+                uploadProgress: 0,
             };
             newJobs.push(job);
 
+            // Start upload progress UI immediately
+            startUploadProgress(tempId);
+
             // Background Upload
             api.uploadImage(currentProjectId, file).then(uploadedJob => {
+                stopUploadProgress(tempId);
                 if (uploadedJob) {
                     updateJob(tempId, {
                         id: uploadedJob.id, // Update to real ID
                         status: 'queued',
                         originalUrl: uploadedJob.originalUrl,
-                        thumbnailUrl: uploadedJob.thumbnailUrl // Update to backend URL
+                        thumbnailUrl: uploadedJob.thumbnailUrl, // Update to backend URL
+                        uploadProgress: 100,
                     });
+
+                    // UX Task 7: Smart Default Modules - auto-select "General" module on first upload if no module selected
+                    const freshProject = projectsRef.current.find(p => p.id === currentProjectId);
+                    if (freshProject && !freshProject.selectedModulePreset && freshProject.jobs.length <= 1) {
+                        // First upload to this project, auto-select the General module
+                        updateCurrentProject({ selectedModulePreset: 'general', modulePrompt: modules.find(m => m.id === 'general')?.prompt || '' });
+                    }
+
+                    // QoL #11: Auto-name default projects once, based on first uploaded image
+                    const autoNameKey = `lightwork_project_autonamed_${currentProjectId}`;
+                    const alreadyNamed = didAutoNameProjectRef.current[currentProjectId] || localStorage.getItem(autoNameKey) === 'true';
+                    const isDefaultName = /^Session #\d+$/i.test(currentProject.name) || currentProject.name.trim().toLowerCase() === 'untitled project';
+                    if (!alreadyNamed && isDefaultName) {
+                        didAutoNameProjectRef.current[currentProjectId] = true;
+                        localStorage.setItem(autoNameKey, 'true');
+                        generateSmartFilename(file).then(r => {
+                            if (r.success && r.result) {
+                                const clean = r.result.replace(/\.[^/.]+$/, '').trim();
+                                if (clean.length > 0) {
+                                    updateCurrentProject({ name: clean });
+                                }
+                            }
+                        }).catch(() => {
+                            // ignore AI failures
+                        });
+                    }
+
+                    // Let the user see 100% briefly, then clear
+                    setTimeout(() => {
+                        updateJob(uploadedJob.id, { uploadProgress: undefined });
+                    }, 450);
                 } else {
                     updateJob(tempId, { status: 'error', errorMsg: 'Upload failed' });
                 }
@@ -263,8 +539,14 @@ function AppContent() {
         lastSelectedId.current = null;
     };
 
-    const clearAllJobs = () => {
-        if (confirm("Remove all assets from this session?")) {
+    const clearAllJobs = async () => {
+        const confirmed = await confirm({
+            title: 'Clear All Images',
+            message: 'Are you sure you want to remove all images from this session? This action cannot be undone.',
+            confirmLabel: 'Clear All',
+            variant: 'danger',
+        });
+        if (confirmed) {
             setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: [] } : p));
             // Should call API to delete jobs
         }
@@ -284,6 +566,54 @@ function AppContent() {
                 : p
         ));
     };
+
+    // QoL #19: Retry a single failed upload (keeps it per-item)
+    const retryUpload = useCallback((jobId: string) => {
+        const project = projectsRef.current.find(p => p.id === currentProjectId);
+        const job = project?.jobs.find(j => j.id === jobId);
+        if (!job) return;
+        if (!job.file) {
+            addToast('error', 'Original file not available for retry');
+            return;
+        }
+
+        updateJob(jobId, { status: 'uploading', errorMsg: undefined, uploadProgress: 0 });
+        startUploadProgress(jobId);
+
+        api.uploadImage(currentProjectId, job.file).then(uploadedJob => {
+            stopUploadProgress(jobId);
+            if (uploadedJob) {
+                updateJob(jobId, {
+                    id: uploadedJob.id,
+                    status: 'queued',
+                    originalUrl: uploadedJob.originalUrl,
+                    thumbnailUrl: uploadedJob.thumbnailUrl,
+                    uploadProgress: 100,
+                    errorMsg: undefined,
+                });
+                setTimeout(() => {
+                    updateJob(uploadedJob.id, { uploadProgress: undefined });
+                }, 450);
+            } else {
+                updateJob(jobId, { status: 'error', errorMsg: 'Upload failed' });
+            }
+        });
+    }, [currentProjectId, startUploadProgress, stopUploadProgress, updateJob]);
+
+    const generatePdfForCurrentProject = useCallback(async () => {
+        if (isGeneratingPdf) return;
+        setIsGeneratingPdf(true);
+        try {
+            const mod = await import('./services/pdfReport');
+            await mod.generateProjectPdfReport(currentProject);
+            addToast('success', 'PDF report generated');
+        } catch (e) {
+            console.error(e);
+            addToast('error', 'Failed to generate PDF');
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    }, [currentProject, isGeneratingPdf]);
 
     // Optimized parallel processing for Tier 1 limits
     const processQueueParallel = async () => {
@@ -506,6 +836,24 @@ function AppContent() {
     // Main process function - uses parallel by default, falls back to sequential
     const processQueue = processQueueParallel;
 
+    // Handle batch processing (economy mode)
+    const handleProcessBatch = useCallback(async () => {
+        const model = currentProject.selectedMode === 'pro' ? AppModel.PRO : AppModel.FAST;
+        addToast('info', 'Creating batch job...');
+        const createResult = await api.createBatch(currentProjectId, model);
+        if (!createResult.success) {
+            addToast('error', createResult.error || 'Failed to create batch');
+            return;
+        }
+        addToast('success', `Batch created with ${createResult.itemCount} images`);
+        const submitResult = await api.submitBatch(createResult.batchId!);
+        if (!submitResult.success) {
+            addToast('error', submitResult.error || 'Failed to submit batch');
+            return;
+        }
+        addToast('success', 'Batch submitted! Check status panel for progress.');
+    }, [currentProject.selectedMode, currentProjectId, addToast]);
+
     const filteredJobs = (currentProject.jobs || []).filter(j => {
         if (filter === 'all') return true;
         if (filter === 'ready') return ['queued', 'uploading', 'paused', 'retrying'].includes(j.status);
@@ -513,6 +861,28 @@ function AppContent() {
         if (filter === 'failed') return j.status === 'error';
         return true;
     });
+
+    const renderedJobs = filteredJobs.slice(0, visibleCount);
+
+    // Interactions #7: IntersectionObserver sentinel to load more
+    useEffect(() => {
+        const el = loadMoreRef.current;
+        if (!el) return;
+
+        if (renderedJobs.length >= filteredJobs.length) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const first = entries[0];
+                if (!first?.isIntersecting) return;
+                setVisibleCount(v => Math.min(filteredJobs.length, v + 36));
+            },
+            { root: null, rootMargin: '800px 0px', threshold: 0 }
+        );
+
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [filteredJobs.length, renderedJobs.length]);
 
     const stats = {
         all: (currentProject.jobs || []).length,
@@ -528,8 +898,14 @@ function AppContent() {
     return (
         <div className="flex h-screen overflow-hidden bg-[#F2F0E9] text-stone-900 font-sans selection:bg-clay-500/20" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
             <ToastContainer toasts={toasts} />
-            {showOnboarding && <Onboarding onComplete={() => { setShowOnboarding(false); localStorage.setItem('lightwork_onboarded', 'true'); }} />}
-            <Lightbox isOpen={!!lightboxData} imageUrl={lightboxData?.url || ''} originalUrl={lightboxData?.original} onClose={() => setLightboxData(null)} />
+            <ConfirmDialogComponent />
+            <Suspense fallback={null}>
+                {showOnboarding && <LazyOnboarding onComplete={() => { setShowOnboarding(false); localStorage.setItem('lightwork_onboarded', 'true'); }} />}
+            </Suspense>
+
+            <Suspense fallback={null}>
+                <LazyLightbox isOpen={!!lightboxData} imageUrl={lightboxData?.url || ''} originalUrl={lightboxData?.original} onClose={() => setLightboxData(null)} />
+            </Suspense>
             {isDragging && <div className="fixed inset-4 border-4 border-dashed border-clay-500/50 rounded-3xl bg-clay-50/20 z-[100] pointer-events-none flex items-center justify-center backdrop-blur-sm"><div className="bg-[#FDFCFB]/90 p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4"><UploadCloud className="w-12 h-12 text-clay-600 animate-bounce" /><span className="font-bold text-2xl text-stone-900">Drop Assets to Ingest</span></div></div>}
 
             <Sidebar
@@ -541,7 +917,9 @@ function AppContent() {
             />
 
             {currentView === 'modules' ? (
-                <ModulesManager modules={modules} onCreate={handleCreateModule} onDelete={handleDeleteModule} onUpdate={() => { }} onBack={() => setCurrentView('workspace')} />
+                <Suspense fallback={null}>
+                    <LazyModulesManager modules={modules} onCreate={handleCreateModule} onDelete={handleDeleteModule} onUpdate={() => { }} onBack={() => setCurrentView('workspace')} />
+                </Suspense>
             ) : (
                 <div className="flex-1 flex overflow-hidden">
                     <main className="flex-1 relative flex flex-col h-full overflow-hidden transition-all bg-[#F2F0E9]" onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}>
@@ -569,34 +947,70 @@ function AppContent() {
                             </div>
 
                             <div className="flex items-center gap-3">
+                                {currentProject.jobs && currentProject.jobs.length > 0 && (
+                                    <button
+                                        onClick={generatePdfForCurrentProject}
+                                        disabled={isGeneratingPdf}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-stone-600 bg-white hover:bg-stone-50 rounded-lg border border-stone-200 shadow-sm disabled:opacity-50"
+                                        title="Generate PDF Report"
+                                    >
+                                        {isGeneratingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                                        <span>PDF</span>
+                                    </button>
+                                )}
+
+                                {currentProject.jobs && currentProject.jobs.length > 0 && (
+                                    <button
+                                        onClick={selectAllVisible}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-stone-600 bg-white hover:bg-stone-50 rounded-lg border border-stone-200 shadow-sm"
+                                        title="Select All (Ctrl+A)"
+                                    >
+                                        <BoxSelect className="w-3.5 h-3.5" />
+                                        <span>Select All</span>
+                                    </button>
+                                )}
+
                                 {currentProject.jobs && currentProject.jobs.length > 0 && <button onClick={clearAllJobs} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Clear All"><Trash2 className="w-4 h-4" /></button>}
                                 {currentProject.jobs && currentProject.jobs.some(j => j.status === 'error' || j.status === 'paused') && <button onClick={retryFailed} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-stone-600 bg-white hover:bg-stone-50 rounded-lg border border-stone-200 shadow-sm"><RefreshCw className="w-3.5 h-3.5" /><span>Retry</span></button>}
+
+                                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-stone-200 shadow-sm" title="Grid Zoom">
+                                    <Grip className="w-3.5 h-3.5 text-stone-400" />
+                                    <input
+                                        type="range"
+                                        min={2}
+                                        max={6}
+                                        step={1}
+                                        value={gridColumns}
+                                        onChange={(e) => setGridColumns(parseInt(e.target.value, 10))}
+                                        className="w-24 accent-stone-900"
+                                        aria-label="Grid zoom"
+                                    />
+                                </div>
+
                                 <label className="group cursor-pointer flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 rounded-lg hover:border-clay-400 hover:shadow-md hover:shadow-clay-500/5 active:scale-95 transition-all h-9"><UploadCloud className="w-4 h-4 text-stone-500 group-hover:text-clay-600" /><span className="text-xs font-bold uppercase tracking-wide text-stone-700 font-heading">Add Assets</span><input type="file" multiple accept="image/*" className="hidden" onChange={handleFileUpload} /></label>
                             </div>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-10 pb-40 scroll-smooth" onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}>
                             {(currentProject.jobs || []).length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center">
-                                    {/* Empty State */}
-                                    <div className="w-full max-w-lg border border-dashed border-stone-300 rounded-2xl p-16 flex flex-col items-center justify-center bg-[#FDFCFB]">
-                                        <ImageIcon className="w-12 h-12 text-stone-200 mb-6" />
-                                        <h3 className="text-2xl font-heading font-bold text-stone-900 mb-3 tracking-tight">Your Workspace is Empty</h3>
-                                        <p className="text-stone-500 text-center text-sm font-sans">Drag & drop images to begin refinement.</p>
-                                    </div>
-                                </div>
+                                <EmptyState type="workspace" />
                             ) : (
                                 <div className="grid gap-8 pb-24" style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}>
-                                    {filteredJobs.map(job => (
+                                    {renderedJobs.map(job => (
                                         <ImageCard
                                             key={job.id}
                                             job={job}
                                             isSelected={!!job.selected}
                                             isActive={!!job.selected}
                                             onToggleSelect={toggleSelection}
-                                            onClick={(id) => handleJobClick(id, false, false)}
+                                            onClick={(id, e) => handleJobClick(id, e.shiftKey, e.metaKey || e.ctrlKey)}
                                         />
                                     ))}
+
+                                    {/* Infinite scroll sentinel */}
+                                    {renderedJobs.length < filteredJobs.length && (
+                                        <div ref={loadMoreRef} className="h-8 col-span-full" />
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -610,48 +1024,38 @@ function AppContent() {
                             onApiModeChange={setApiMode}
                             onUpdateProject={updateCurrentProject}
                             onProcess={processQueue}
-                            onProcessBatch={async () => {
-                                const model = currentProject.selectedMode === 'pro' ? AppModel.PRO : AppModel.FAST;
-                                addToast('info', 'Creating batch job...');
-                                const createResult = await api.createBatch(currentProjectId, model);
-                                if (!createResult.success) {
-                                    addToast('error', createResult.error || 'Failed to create batch');
-                                    return;
-                                }
-                                addToast('success', `Batch created with ${createResult.itemCount} images`);
-                                const submitResult = await api.submitBatch(createResult.batchId!);
-                                if (!submitResult.success) {
-                                    addToast('error', submitResult.error || 'Failed to submit batch');
-                                    return;
-                                }
-                                addToast('success', 'Batch submitted! Check status panel for progress.');
-                            }}
+                            onProcessBatch={handleProcessBatch}
                             onCreateModule={handleCreateModule}
                             onDeleteModule={handleDeleteModule}
                             onManageModules={() => setCurrentView('modules')}
                         />
 
-                        <BatchStatusPanel onBatchComplete={(batchId) => {
-                            addToast('success', 'Batch processing complete!');
-                            // Refresh project data to show results
-                            api.getProjects().then(projects => setProjects(projects));
-                        }} />
+                        <Suspense fallback={null}>
+                            <LazyBatchStatusPanel onBatchComplete={(batchId) => {
+                                addToast('success', 'Batch processing complete!');
+                                // Refresh project data to show results
+                                api.getProjects().then(projects => setProjects(projects));
+                            }} />
+                        </Suspense>
                     </main>
 
                     {selectedJobs.length > 0 && (
-                        <Inspector
-                            selectedJobs={selectedJobs}
-                            onClose={clearSelection}
-                            onUpdateJob={updateJob}
-                            onRemove={(ids) => {
-                                setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) } : p));
-                                clearSelection();
-                            }}
-                            onRetry={(ids) => {
-                                setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: p.jobs.map(j => ids.includes(j.id) ? { ...j, status: 'queued', errorMsg: undefined, retryCount: 0 } : j) } : p));
-                            }}
-                            onZoom={(url) => setLightboxData({ url, original: selectedJobs.length === 1 ? selectedJobs[0].originalUrl : undefined })}
-                        />
+                        <Suspense fallback={null}>
+                            <LazyInspector
+                                selectedJobs={selectedJobs}
+                                onClose={clearSelection}
+                                onUpdateJob={updateJob}
+                                onRetryUpload={retryUpload}
+                                onRemove={(ids) => {
+                                    setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) } : p));
+                                    clearSelection();
+                                }}
+                                onRetry={(ids) => {
+                                    setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: p.jobs.map(j => ids.includes(j.id) ? { ...j, status: 'queued', errorMsg: undefined, retryCount: 0 } : j) } : p));
+                                }}
+                                onZoom={(url) => setLightboxData({ url, original: selectedJobs.length === 1 ? selectedJobs[0].originalUrl : undefined })}
+                            />
+                        </Suspense>
                     )}
                 </div>
             )}

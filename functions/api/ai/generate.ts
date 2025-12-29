@@ -1,5 +1,21 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { z } from 'zod';
+
+// Input validation schema
+const generateRequestSchema = z.object({
+    type: z.enum(['enhance', 'rename', 'describe']),
+    jobId: z.string().uuid().optional(),
+    text: z.string().max(5000).optional(),
+    compressedImageData: z.string().optional(),
+}).refine(
+    (data) => {
+        // 'enhance' requires text, others require image data
+        if (data.type === 'enhance') return !!data.text;
+        return !!data.compressedImageData;
+    },
+    { message: 'Invalid input: enhance requires text, rename/describe require image data' }
+);
 
 // Parse retry delay from Google's rate limit error
 function parseRetryDelay(errorMessage: string): number {
@@ -25,8 +41,16 @@ function jsonResponse(data: any, status: number = 200, extraHeaders?: Record<str
 
 export async function onRequestPost(context) {
     try {
-        // Accept compressedImageData from client to avoid R2 read + OOM
-        const { type, jobId, text, compressedImageData } = await context.request.json();
+        const rawBody = await context.request.json();
+        
+        // Validate input with Zod schema
+        const validation = generateRequestSchema.safeParse(rawBody);
+        if (!validation.success) {
+            const errors = validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+            return jsonResponse({ success: false, error: `Validation failed: ${errors}` }, 400);
+        }
+        
+        const { type, jobId, text, compressedImageData } = validation.data;
 
         console.log("[AI Generate] Request type:", type, "jobId:", jobId, "hasCompressedData:", !!compressedImageData);
 
@@ -39,8 +63,7 @@ export async function onRequestPost(context) {
         let contents: any = null;
 
         if (type === 'enhance') {
-            // Text-only task - no image needed
-            if (!text) return jsonResponse({ success: false, error: "Missing text" }, 400);
+            // Text-only task - no image needed (already validated)
             prompt = `Refine the following image editing instruction to be more technical, precise, and effective for an AI image generator. Keep it concise. Only output the refined instruction, nothing else. Input: "${text}"`;
             contents = { parts: [{ text: prompt }] };
         }

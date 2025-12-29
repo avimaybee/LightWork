@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Module } from '../types';
-import { ArrowLeft, Plus, Trash2, Edit3, Save, X, LayoutGrid, Check, Terminal } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit3, Save, X, LayoutGrid, Check, Terminal, Star } from 'lucide-react';
 
 interface ModulesManagerProps {
     modules: Module[];
@@ -18,6 +18,50 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
     // Detail / Edit View State
     const [selectedModule, setSelectedModule] = useState<Module | null>(null);
     const [editPrompt, setEditPrompt] = useState('');
+
+    const FAVORITES_KEY = 'lightwork_favorite_module_ids';
+    const loadFavorites = (): Set<string> => {
+        try {
+            const raw = localStorage.getItem(FAVORITES_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === 'string'));
+            return new Set();
+        } catch {
+            return new Set();
+        }
+    };
+
+    const [favoriteIds, setFavoriteIds] = useState<Set<string>>(loadFavorites);
+
+    const saveFavorites = (next: Set<string>) => {
+        try {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(next)));
+        } catch {
+            // ignore storage failures
+        }
+        setFavoriteIds(new Set(next));
+        try {
+            window.dispatchEvent(new Event('lightwork:favorites'));
+        } catch {
+            // ignore
+        }
+    };
+
+    const toggleFavorite = (id: string) => {
+        const next = new Set(favoriteIds);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        saveFavorites(next);
+    };
+
+    const isFavorite = (id: string) => favoriteIds.has(id);
+
+    const orderedModules = [...modules].sort((a, b) => {
+        const af = isFavorite(a.id);
+        const bf = isFavorite(b.id);
+        if (af !== bf) return af ? -1 : 1;
+        return (a.name || '').localeCompare(b.name || '');
+    });
 
     const handleCreate = () => {
         if(newName && newPrompt) {
@@ -109,7 +153,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                     </div>
 
                     {/* Module Cards */}
-                    {modules.map(module => (
+                    {orderedModules.map(module => (
                         <div 
                             key={module.id} 
                             onClick={() => openModule(module)}
@@ -128,14 +172,24 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                         </span>
                                     </div>
                                 </div>
-                                {module.isCustom && (
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); onDelete(module.id); }}
-                                        className="text-stone-300 hover:text-red-500 transition-colors p-1"
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); toggleFavorite(module.id); }}
+                                        className={`p-1 rounded-md transition-colors ${isFavorite(module.id) ? 'text-clay-600 hover:text-clay-700 hover:bg-clay-50' : 'text-stone-300 hover:text-stone-600 hover:bg-stone-50'}`}
+                                        title={isFavorite(module.id) ? 'Unfavorite' : 'Favorite'}
                                     >
-                                        <Trash2 className="w-4 h-4" />
+                                        <Star className="w-4 h-4" fill={isFavorite(module.id) ? 'currentColor' : 'none'} />
                                     </button>
-                                )}
+                                    {module.isCustom && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); onDelete(module.id); }}
+                                            className="text-stone-300 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-red-50"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Card Body */}
@@ -175,9 +229,18 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                     </p>
                                 </div>
                             </div>
-                            <button onClick={() => setSelectedModule(null)} className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
-                                <X className="w-6 h-6 text-stone-400" />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => toggleFavorite(selectedModule.id)}
+                                    className={`p-2 rounded-lg transition-colors ${isFavorite(selectedModule.id) ? 'text-clay-600 hover:bg-clay-50' : 'text-stone-400 hover:bg-stone-100 hover:text-stone-600'}`}
+                                    title={isFavorite(selectedModule.id) ? 'Unfavorite' : 'Favorite'}
+                                >
+                                    <Star className="w-5 h-5" fill={isFavorite(selectedModule.id) ? 'currentColor' : 'none'} />
+                                </button>
+                                <button onClick={() => setSelectedModule(null)} className="p-2 hover:bg-stone-100 rounded-lg transition-colors" title="Close">
+                                    <X className="w-6 h-6 text-stone-400" />
+                                </button>
+                            </div>
                         </div>
                         
                         {/* Modal Body */}

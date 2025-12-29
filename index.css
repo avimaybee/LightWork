@@ -1,1 +1,104 @@
 @import "tailwindcss";
+
+@theme {
+	--font-sans: "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "Lexend Deca", ui-sans-serif, system-ui, sans-serif;
+	--font-logo: "Funnel Display", ui-sans-serif, system-ui, sans-serif;
+
+	--color-primary: #D97757;
+
+	--color-clay-50: #FFF8F6;
+	--color-clay-100: #FFEADD;
+	--color-clay-200: #FFD5C0;
+	--color-clay-300: #FDBA9F;
+	--color-clay-400: #F0906F;
+	--color-clay-500: #D97757;
+	--color-clay-600: #C25D3C;
+	--color-clay-700: #9F462A;
+	--color-clay-800: #833923;
+	--color-clay-900: #4A1D11;
+
+	/* Status Color Tokens - Semantic colors for processing states */
+	--color-status-success: #16a34a;
+	--color-status-success-bg: #dcfce7;
+	--color-status-success-text: #166534;
+
+	--color-status-error: #dc2626;
+	--color-status-error-bg: #fef2f2;
+	--color-status-error-text: #b91c1c;
+
+	--color-status-warning: #d97706;
+	--color-status-warning-bg: #fef3c7;
+	--color-status-warning-text: #92400e;
+
+	--color-status-pending: #6b7280;
+	--color-status-pending-bg: #f3f4f6;
+	--color-status-pending-text: #4b5563;
+
+	--color-status-processing: #2563eb;
+	--color-status-processing-bg: #dbeafe;
+	--color-status-processing-text: #1d4ed8;
+}
+
+@layer utilities {
+	.glass {
+		@apply bg-white/10 backdrop-blur-md border border-white/20;
+	}
+
+	.content-auto {
+		content-visibility: auto;
+		contain-intrinsic-size: 360px 360px;
+	}
+}
+
+/* Custom Focus Ring - Consistent Stone aesthetic */
+input:focus,
+textarea:focus,
+select:focus,
+button:focus-visible {
+	outline: none;
+}
+
+input:focus:not([type="checkbox"]):not([type="radio"]),
+textarea:focus {
+	ring: 2px;
+	ring-color: #78716c; /* stone-500 */
+	ring-offset: 2px;
+	box-shadow: 0 0 0 2px #FDFCFB, 0 0 0 4px #78716c;
+}
+
+/* Button focus visible - only show on keyboard navigation */
+button:focus-visible {
+	box-shadow: 0 0 0 2px #FDFCFB, 0 0 0 4px #78716c;
+}
+
+/* Custom Scrollbar - Stone aesthetic */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #d6d3d1 transparent;
+}
+
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+	background: #d6d3d1;
+	border-radius: 9999px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+	background: #a8a29e;
+	background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+	background: transparent;
+}
