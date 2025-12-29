@@ -27,8 +27,11 @@ export function BatchStatusPanel({ onBatchComplete }: BatchStatusPanelProps) {
                 const effective = status || batch;
                 reconciled.push(effective);
 
+                const doneCount = (effective.completedCount || 0) + (effective.failedCount || 0);
+                const isFinalized = !!effective.completedAt || (effective.requestCount > 0 && doneCount >= effective.requestCount);
                 const terminal = effective.status === 'succeeded' || effective.status === 'failed' || effective.status === 'cancelled';
-                if (terminal && !notifiedCompleteRef.current.has(effective.id)) {
+
+                if (terminal && isFinalized && !notifiedCompleteRef.current.has(effective.id)) {
                     notifiedCompleteRef.current.add(effective.id);
                     onBatchComplete?.(effective.id);
                 }
@@ -55,7 +58,9 @@ export function BatchStatusPanel({ onBatchComplete }: BatchStatusPanelProps) {
         const status = await api.getBatchStatus(batchId);
         if (status) {
             setBatches(prev => prev.map(b => b.id === batchId ? status : b));
-            if (status.status === 'succeeded' || status.status === 'failed') {
+            const doneCount = (status.completedCount || 0) + (status.failedCount || 0);
+            const isFinalized = !!status.completedAt || (status.requestCount > 0 && doneCount >= status.requestCount);
+            if ((status.status === 'succeeded' || status.status === 'failed' || status.status === 'cancelled') && isFinalized) {
                 onBatchComplete?.(batchId);
             }
         }
@@ -65,7 +70,7 @@ export function BatchStatusPanel({ onBatchComplete }: BatchStatusPanelProps) {
     if (batches.length === 0) return null;
 
     return (
-        <div className="fixed bottom-20 right-4 z-50 w-80 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden">
+        <div className="fixed bottom-28 right-4 z-50 w-80 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden">
             <div className="px-4 py-3 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
                 <h3 className="text-sm font-medium text-stone-700">Batch Processing</h3>
                 <span className="text-xs text-stone-400">{batches.length} active</span>

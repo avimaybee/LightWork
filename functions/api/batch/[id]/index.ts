@@ -164,8 +164,14 @@ export async function onRequestGet(context: { request: Request; env: Env; params
             }
         }
 
-        // Only poll Gemini for active batches, with throttling
-        if ((status === 'submitted' || status === 'running') && batchJob.gemini_batch_name) {
+        // Poll Gemini for:
+        // - active batches (submitted/running)
+        // - reconcile-needed batches (status already terminal but DB not finalized: completed_at is NULL)
+        // This is critical because the client may close the tab before results are imported.
+        const needsReconcile = !batchJob.completed_at && (status === 'succeeded' || status === 'failed' || status === 'cancelled');
+
+        // Only poll Gemini for pollable batches, with throttling
+        if ((status === 'submitted' || status === 'running' || needsReconcile) && batchJob.gemini_batch_name) {
             const lastPolled = batchJob.last_polled_at || 0;
             if (now - lastPolled >= POLL_THROTTLE_MS) {
                 shouldPollGemini = true;
@@ -199,10 +205,14 @@ export async function onRequestGet(context: { request: Request; env: Env; params
 
                 status = newStatus;
 
-                // If succeeded, process results
-                // Per Gemini Batch API docs: inline results are in `dest.inlined_responses`.
-                if (newStatus === 'succeeded' && (geminiBatch as any).dest?.inlined_responses) {
-                    await processResults(context.env, batchId, (geminiBatch as any).dest.inlined_responses);
+                // If succeeded, process results.
+                // Per @google/genai BatchJobDestination: inline results are in `dest.inlinedResponses`.
+                // (Some raw API payloads may use snake_case; support both.)
+                const inlinedResponses = (geminiBatch as any).dest?.inlinedResponses
+                    ?? (geminiBatch as any).dest?.inlined_responses;
+
+                if (newStatus === 'succeeded' && Array.isArray(inlinedResponses)) {
+                    await processResults(context.env, batchId, inlinedResponses);
                 }
 
                 // If cancelled, mark finalized
