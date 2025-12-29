@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Wifi, WifiOff, CheckCircle2, Info } from 'lucide-react';
+import { Wifi, WifiOff, CheckCircle2, Info, AlertTriangle } from 'lucide-react';
 
 export interface ToastMsg {
     id: string;
-    type: 'success' | 'info' | 'error';
+    type: 'success' | 'info' | 'error' | 'warning';
     text: string;
 }
 
@@ -15,6 +15,7 @@ export const ToastContainer: React.FC<{ toasts: ToastMsg[] }> = ({ toasts }) => 
                     {t.type === 'success' && <CheckCircle2 className="w-5 h-5 text-green-500" />}
                     {t.type === 'error' && <WifiOff className="w-5 h-5 text-red-500" />}
                     {t.type === 'info' && <Info className="w-5 h-5 text-blue-500" />}
+                    {t.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-500" />}
                     <span className="text-sm font-medium text-stone-700">{t.text}</span>
                 </div>
             ))}

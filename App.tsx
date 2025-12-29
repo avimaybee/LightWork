@@ -17,9 +17,11 @@ import { processImageWithGemini } from './services/geminiService';
 import { generateThumbnail, wait, calculateBackoff } from './utils';
 import { api } from './services/api';
 
-const MAX_CONCURRENT_JOBS = 1; // Serial processing to respect Free Tier rate limits
-// Even with 1 worker, a 2s gap is ~30 RPM and can exceed per-region RPM.
-const MIN_GEMINI_REQUEST_SPACING_MS = 12000; // ~5 RPM
+// Tier 1 Optimized Settings
+// With paid Tier 1 limits (500 RPM, 500K TPM), we can process much faster
+const MAX_CONCURRENT_JOBS = 5;  // Process 5 images in parallel
+const MIN_GEMINI_REQUEST_SPACING_MS = 500; // 500ms between requests (~120 RPM safe rate)
+const PARALLEL_BATCH_SIZE = 10; // Send up to 10 images per parallel API call
 
 type AppView = 'workspace' | 'modules';
 type FilterType = 'all' | 'ready' | 'done' | 'failed';
@@ -283,7 +285,145 @@ function AppContent() {
         ));
     };
 
-    const processQueue = async () => {
+    // Optimized parallel processing for Tier 1 limits
+    const processQueueParallel = async () => {
+        if (!navigator.onLine) { addToast('error', 'You are offline.'); return; }
+        if (isProcessing) return;
+
+        const freshProject = projectsRef.current.find(p => p.id === currentProjectId);
+        if (!freshProject) return;
+
+        // Get all queued jobs
+        const queuedJobs = freshProject.jobs.filter(j => 
+            j.status === 'queued' || j.status === 'retrying'
+        );
+        
+        if (queuedJobs.length === 0) {
+            addToast('info', 'No images to process');
+            return;
+        }
+
+        setIsProcessing(true);
+        addToast('info', `Processing ${queuedJobs.length} images in parallel...`);
+
+        // Mark all as processing
+        for (const job of queuedJobs) {
+            updateJob(job.id, { status: 'processing', errorMsg: undefined });
+        }
+
+        // Track retries per batch to prevent infinite loops
+        const MAX_BATCH_RETRIES = 3;
+        const batchRetries = new Map<number, number>();
+
+        try {
+            // Process in batches of PARALLEL_BATCH_SIZE
+            let batchIndex = 0;
+            while (batchIndex < queuedJobs.length) {
+                const batch = queuedJobs.slice(batchIndex, batchIndex + PARALLEL_BATCH_SIZE);
+                const jobIds = batch.map(j => j.id);
+                const model = freshProject.selectedMode === 'fast' ? AppModel.FAST : AppModel.PRO;
+
+                const result = await api.processImagesParallel(
+                    jobIds,
+                    model,
+                    freshProject.modulePrompt
+                );
+
+                if (!result.success) {
+                    if (result.retryAfterMs) {
+                        // Check if we've exceeded max retries for this batch
+                        const currentRetries = batchRetries.get(batchIndex) || 0;
+                        
+                        if (currentRetries < MAX_BATCH_RETRIES) {
+                            // Rate limited - wait and retry this batch
+                            const waitSec = Math.ceil(result.retryAfterMs / 1000);
+                            addToast('warning', `Rate limited. Waiting ${waitSec}s... (retry ${currentRetries + 1}/${MAX_BATCH_RETRIES})`);
+                            
+                            for (const job of batch) {
+                                updateJob(job.id, { 
+                                    status: 'retrying', 
+                                    errorMsg: `Rate limited. Waiting ${waitSec}s...` 
+                                });
+                            }
+                            
+                            await wait(result.retryAfterMs);
+                            
+                            // Record retry attempt
+                            batchRetries.set(batchIndex, currentRetries + 1);
+                            
+                            // Reset status and retry (don't advance batchIndex)
+                            for (const job of batch) {
+                                updateJob(job.id, { status: 'processing' });
+                            }
+                            continue;
+                        } else {
+                            // Max retries exceeded - mark as failed
+                            addToast('error', `Batch failed after ${MAX_BATCH_RETRIES} retries`);
+                            for (const job of batch) {
+                                updateJob(job.id, { status: 'error', errorMsg: 'Max retries exceeded' });
+                            }
+                        }
+                    } else {
+                        // General error - mark all as failed
+                        for (const job of batch) {
+                            updateJob(job.id, { status: 'error', errorMsg: result.error });
+                        }
+                    }
+                } else if (result.processed) {
+                    // Update individual job statuses
+                    for (const processed of result.processed) {
+                        if (processed.success) {
+                            // Fetch the result image URL - for now we'll refresh from backend
+                            updateJob(processed.jobId, { status: 'completed' });
+                        } else {
+                            updateJob(processed.jobId, { 
+                                status: 'error', 
+                                errorMsg: processed.error || 'Processing failed' 
+                            });
+                        }
+                    }
+
+                    // Show progress
+                    const completed = batchIndex + batch.length;
+                    if (completed < queuedJobs.length) {
+                        addToast('info', `Processed ${completed}/${queuedJobs.length}...`);
+                    }
+                }
+
+                // Move to next batch
+                batchIndex += PARALLEL_BATCH_SIZE;
+
+                // Small delay between batches for safety
+                if (batchIndex < queuedJobs.length) {
+                    await wait(MIN_GEMINI_REQUEST_SPACING_MS);
+                }
+            }
+
+            // Refresh project data to get result URLs
+            const updatedProjects = await api.getProjects();
+            setProjects(updatedProjects);
+            
+            addToast('success', 'Batch complete!');
+        } catch (err) {
+            console.error('Parallel processing error:', err);
+            addToast('error', 'Processing failed');
+            
+            // Mark remaining as queued for retry
+            for (const job of queuedJobs) {
+                const current = projectsRef.current
+                    .find(p => p.id === currentProjectId)?.jobs
+                    .find(j => j.id === job.id);
+                if (current?.status === 'processing') {
+                    updateJob(job.id, { status: 'queued' });
+                }
+            }
+        }
+
+        setIsProcessing(false);
+    };
+
+    // Legacy sequential processing (fallback)
+    const processQueueSequential = async () => {
         if (!navigator.onLine) { addToast('error', 'You are offline.'); return; }
         if (isProcessing) return;
 
@@ -309,14 +449,12 @@ function AppContent() {
 
             try {
                 // Enforce minimum spacing between Gemini requests to avoid RPM throttling.
-                // This is separate from per-job retry delays.
                 nextGeminiAllowedAtRef.current = Math.max(
                     nextGeminiAllowedAtRef.current,
                     Date.now() + MIN_GEMINI_REQUEST_SPACING_MS
                 );
 
                 // Pass file or URL - compression will always happen client-side
-                // This is CRITICAL to avoid hitting Gemini TPM limits with large images
                 const imageSource = job.file || job.thumbnailUrl || job.originalUrl;
                 const result = await processImageWithGemini(
                     imageSource,
@@ -330,7 +468,6 @@ function AppContent() {
                     updateJob(job.id, { status: 'completed', resultUrl: `data:image/png;base64,${result.imageBytes}` });
                 } else {
                     if (result.isRetryable && job.retryCount < 5) {
-                        // Use the exact retry delay from Google's API, or fallback to backoff
                         const delay = result.retryAfterSeconds
                             ? result.retryAfterSeconds * 1000
                             : calculateBackoff(job.retryCount);
@@ -365,6 +502,9 @@ function AppContent() {
         setIsProcessing(false);
         addToast('success', 'Batch complete');
     };
+
+    // Main process function - uses parallel by default, falls back to sequential
+    const processQueue = processQueueParallel;
 
     const filteredJobs = (currentProject.jobs || []).filter(j => {
         if (filter === 'all') return true;
