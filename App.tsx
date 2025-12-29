@@ -70,6 +70,10 @@ function AppContent() {
     const uploadProgressValueRef = useRef<Record<string, number>>({});
 
     const didAutoNameProjectRef = useRef<Record<string, true>>({});
+    
+    // Refs for handlers used in keyboard shortcuts (to avoid temporal dead zone)
+    const handleProcessBatchRef = useRef<() => void>(() => {});
+    const processQueueRef = useRef<() => void>(() => {});
 
     useEffect(() => {
         projectsRef.current = projects;
@@ -236,6 +240,18 @@ function AppContent() {
         ));
     }, [currentProjectId, getRenderedJobs]);
 
+    // Moved clearSelection before keyboard shortcuts useEffect to avoid temporal dead zone
+    const clearSelection = useCallback(() => {
+        setProjects(prev => prev.map(p =>
+            p.id === currentProjectId ? { ...p, jobs: p.jobs.map(j => ({ ...j, selected: false })) } : p
+        ));
+        lastSelectedId.current = null;
+    }, [currentProjectId]);
+
+    // Compute selectedJobs and queuedCount before keyboard shortcuts useEffect
+    const selectedJobs = (currentProject.jobs || []).filter(j => j.selected);
+    const queuedCount = (currentProject.jobs || []).filter(j => j.status === 'queued' || j.status === 'error' || j.status === 'paused').length;
+
     // QoL #2: Keyboard Shortcuts
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -303,10 +319,10 @@ function AppContent() {
                 if (!isProcessing && queuedCount > 0) {
                     if (apiMode === 'economy') {
                         // Trigger batch processing
-                        handleProcessBatch();
+                        handleProcessBatchRef.current();
                     } else {
                         // Trigger real-time processing
-                        processQueue();
+                        processQueueRef.current();
                     }
                 }
                 return;
@@ -315,7 +331,7 @@ function AppContent() {
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [currentView, selectAllVisible, lightboxData, selectedJobs, clearSelection, confirm, currentProjectId, isProcessing, queuedCount, apiMode, handleProcessBatch, processQueue]);
+    }, [currentView, selectAllVisible, lightboxData, selectedJobs, clearSelection, confirm, currentProjectId, isProcessing, queuedCount, apiMode]);
 
     const stopUploadProgress = useCallback((jobId: string) => {
         const timerId = uploadProgressTimersRef.current[jobId];
@@ -532,12 +548,7 @@ function AppContent() {
         handleJobClick(id, shiftKey, true);
     };
 
-    const clearSelection = () => {
-        setProjects(prev => prev.map(p =>
-            p.id === currentProjectId ? { ...p, jobs: p.jobs.map(j => ({ ...j, selected: false })) } : p
-        ));
-        lastSelectedId.current = null;
-    };
+    // clearSelection is now defined earlier (before keyboard shortcuts useEffect)
 
     const clearAllJobs = async () => {
         const confirmed = await confirm({
@@ -854,6 +865,12 @@ function AppContent() {
         addToast('success', 'Batch submitted! Check status panel for progress.');
     }, [currentProject.selectedMode, currentProjectId, addToast]);
 
+    // Update refs for keyboard shortcuts to use (in useEffect to avoid side effects during render)
+    useEffect(() => {
+        processQueueRef.current = processQueue;
+        handleProcessBatchRef.current = handleProcessBatch;
+    }, [processQueue, handleProcessBatch]);
+
     const filteredJobs = (currentProject.jobs || []).filter(j => {
         if (filter === 'all') return true;
         if (filter === 'ready') return ['queued', 'uploading', 'paused', 'retrying'].includes(j.status);
@@ -891,7 +908,7 @@ function AppContent() {
         failed: (currentProject.jobs || []).filter(j => j.status === 'error').length
     };
 
-    const selectedJobs = (currentProject.jobs || []).filter(j => j.selected);
+    // selectedJobs is now defined earlier (before keyboard shortcuts useEffect)
 
     if (!projects.length && !toasts.length) return <div className="h-screen flex items-center justify-center bg-[#F2F0E9] text-stone-400">Loading Session...</div>;
 
