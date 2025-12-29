@@ -190,7 +190,15 @@ export const Inspector: React.FC<InspectorProps> = ({
                             <button onClick={() => onRetry([job.id])} className="flex items-center justify-center gap-2 px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors border border-transparent hover:border-stone-200">
                                 <RefreshCcw className="w-3.5 h-3.5" /> Re-run
                             </button>
-                            <button onClick={() => { onRemove([job.id]); onClose(); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 border border-stone-200 hover:border-red-100 transition-colors">
+                            <button 
+                                onClick={() => { 
+                                    if (confirm('Delete this image?')) {
+                                        onRemove([job.id]); 
+                                        onClose(); 
+                                    }
+                                }} 
+                                className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 border border-stone-200 hover:border-red-100 transition-colors"
+                            >
                                 <Trash2 className="w-3.5 h-3.5" /> Delete
                             </button>
                         </div>
@@ -316,7 +324,15 @@ export const Inspector: React.FC<InspectorProps> = ({
                         <button onClick={() => onRetry(selectedJobs.map(j => j.id))} className="flex items-center justify-center gap-2 px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors border border-transparent hover:border-stone-200">
                             <RefreshCcw className="w-3.5 h-3.5" /> Re-run
                         </button>
-                        <button onClick={() => { onRemove(selectedJobs.map(j => j.id)); onClose(); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 border border-stone-200 hover:border-red-100 transition-colors">
+                        <button 
+                            onClick={() => { 
+                                if (confirm(`Delete ${selectedJobs.length} selected images?`)) {
+                                    onRemove(selectedJobs.map(j => j.id)); 
+                                    onClose(); 
+                                }
+                            }} 
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 border border-stone-200 hover:border-red-100 transition-colors"
+                        >
                             <Trash2 className="w-3.5 h-3.5" /> Delete
                         </button>
                     </div>

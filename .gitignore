@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 schema.sql
 .dev.vars
+APP-IMPROVEMENT-TASKLIST.md

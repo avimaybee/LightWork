@@ -317,7 +317,7 @@ export const LandingPage: React.FC = () => {
                   <span className="text-[11px] font-sans font-medium text-stone-600">Utility-first. Output-minded.</span>
                 </div>
 
-                <h1 className="mt-7 font-logo text-6xl sm:text-7xl tracking-tight text-stone-900 leading-[0.95]">
+                <h1 className="mt-7 font-logo text-6xl sm:text-7xl font-light tracking-tight text-stone-900 leading-[0.95]">
                   LightWork<span className="text-clay-500">.</span>
                 </h1>
 

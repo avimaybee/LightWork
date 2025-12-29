@@ -152,6 +152,7 @@ function AppContent() {
     };
 
     const handleDeleteModule = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this module?')) return;
         // API Call
         await api.deleteModule(id);
         setModules(prev => prev.filter(m => m.id !== id));
@@ -160,6 +161,7 @@ function AppContent() {
 
     const deleteProject = async (id: string) => {
         if (projects.length <= 1) return;
+        if (!confirm('Are you sure you want to delete this session? This cannot be undone.')) return;
         await api.deleteProject(id);
         const newProjects = projects.filter(p => p.id !== id);
         setProjects(newProjects);

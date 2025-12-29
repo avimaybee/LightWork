@@ -66,7 +66,7 @@ export function AuthModal({ isOpen }: AuthModalProps) {
 
                     {/* Header */}
                     <div className="px-10 pt-12 pb-8 text-center">
-                        <h1 className="font-logo text-4xl font-bold text-stone-900 tracking-tight mb-2">
+                        <h1 className="font-logo text-4xl font-light text-stone-900 tracking-tight mb-2">
                             LightWork<span className="text-clay-500">.</span>
                         </h1>
                         <p className="text-stone-500 text-sm font-sans">

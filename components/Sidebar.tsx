@@ -102,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
               <Command className="w-4 h-4 text-[#FDFCFB]" />
             </div>
-            <span className="font-logo font-medium text-2xl tracking-wide text-stone-900 whitespace-nowrap">LightWork.</span>
+            <span className="font-logo font-light text-2xl tracking-tight text-stone-900 whitespace-nowrap">LightWork.</span>
           </div>
         ) : (
           <div className="w-9 h-9 bg-stone-900 rounded-lg flex items-center justify-center shadow-sm">
