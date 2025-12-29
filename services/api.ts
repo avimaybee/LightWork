@@ -258,6 +258,79 @@ export const api = {
             console.error('Failed to get active batches', e);
             return [];
         }
+    },
+
+    // Parallel Processing - Process multiple images in parallel with throttling
+    processImagesParallel: async (
+        jobIds: string[],
+        model: string,
+        systemPrompt: string
+    ): Promise<{
+        success: boolean;
+        processed?: Array<{ jobId: string; success: boolean; error?: string }>;
+        summary?: { total: number; success: number; failed: number };
+        usage?: { currentRpm: number; rpmUtilization: number; status: string };
+        error?: string;
+        retryAfterMs?: number;
+    }> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/process-parallel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify({ jobIds, model, systemPrompt })
+            });
+
+            const data = await res.json();
+
+            if (res.status === 429) {
+                // Rate limited - return with retry info
+                const retryAfter = res.headers.get('Retry-After');
+                return {
+                    success: false,
+                    error: data.error || 'Rate limited',
+                    retryAfterMs: retryAfter ? parseInt(retryAfter, 10) * 1000 : data.retryAfterMs
+                };
+            }
+
+            return data;
+        } catch (e: any) {
+            console.error('Parallel processing failed', e);
+            return { success: false, error: e.message || 'Network error' };
+        }
+    },
+
+    // API Status - Get current usage stats and health
+    getApiStatus: async (): Promise<{
+        status: 'healthy' | 'warning' | 'critical' | 'error';
+        circuit: 'closed' | 'open' | 'half-open';
+        usage: {
+            currentRpm: number;
+            currentTpm: number;
+            rpmUtilization: number;
+            tpmUtilization: number;
+        };
+        performance: {
+            successRate: number;
+            avgLatencyMs: number;
+        };
+        warnings: string[];
+        recommendations: string[];
+    } | null> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/status`, {
+                headers: authHeaders
+            });
+            if (!res.ok) return null;
+            return await res.json();
+        } catch (e) {
+            console.error('Failed to get API status', e);
+            return null;
+        }
     }
 };
 
