@@ -1,4 +1,4 @@
-import { verifyAuth } from '../lib/auth'; // Adjusted import path
+import { getAuthContext } from '../lib/auth'; // Adjusted import path
 import { corsHeaders } from '../lib/utils'; // Adjusted import path
 
 export const onRequest = async (context) => {
@@ -10,10 +10,11 @@ export const onRequest = async (context) => {
     }
 
     try {
-        const user = await verifyAuth(request, env);
-        if (!user) {
+        const auth = await getAuthContext(request);
+        if (!auth.userId) {
             return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
         }
+        const user = { uid: auth.userId }; // Map for compatibility with existing code
 
         const url = new URL(request.url);
 

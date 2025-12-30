@@ -1201,10 +1201,10 @@ function AppContent() {
             ) : (
                 <div className="flex-1 flex overflow-hidden">
                     <main className="flex-1 relative flex flex-col h-full overflow-hidden transition-all bg-[#F2F0E9]" onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}>
-                        {/* Header: Redesigned for Elegance per Plan */}
-                        <div className="h-20 flex items-center justify-between px-8 border-b border-stone-200/50 bg-[#F2F0E9]/80 backdrop-blur-md z-10 shrink-0 gap-8 relative">
+                        {/* Header: Minimal Icon-Based Design */}
+                        <div className="h-16 flex items-center justify-between px-6 border-b border-stone-200/50 bg-[#F2F0E9]/80 backdrop-blur-md z-10 shrink-0 gap-6 relative">
 
-                            {/* MOBILE SEARCH OVERLAY */}
+                            {/* MOBILE SEARCH OVERLAY (Unchanged logic) */}
                             {isMobileSearchOpen && (
                                 <div className="absolute inset-0 bg-[#F2F0E9] z-20 flex items-center px-4 md:hidden animate-in fade-in slide-in-from-top-2 duration-200">
                                     <div className="relative w-full flex items-center gap-3">
@@ -1229,7 +1229,7 @@ function AppContent() {
                             )}
 
                             {/* LEFT ZONE: Context & Discovery */}
-                            <div className="flex items-center gap-6 min-w-0">
+                            <div className="flex items-center gap-4 min-w-0">
                                 {/* Mobile Search Toggle */}
                                 <button
                                     onClick={() => setIsMobileSearchOpen(true)}
@@ -1249,12 +1249,32 @@ function AppContent() {
 
                                 <div className="h-6 w-px bg-stone-300/30 hidden lg:block" />
 
-                                <div className="items-center gap-2 hidden lg:flex">
+                                <div className="items-center gap-1 hidden lg:flex">
                                     {['all', 'ready', 'done', 'failed'].map(f => {
                                         if (f === 'failed' && stats.failed === 0) return null;
+                                        const isActive = filter === f;
+                                        const icons = {
+                                            all: Layers,
+                                            ready: Clock,
+                                            done: CheckCircle2,
+                                            failed: AlertCircle
+                                        };
+                                        const Icon = icons[f as keyof typeof icons];
+
                                         return (
-                                            <button key={f} onClick={() => setFilter(f as FilterType)} className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all border ${filter === f ? 'bg-stone-800 text-white border-stone-800 shadow-sm' : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300'}`}>
-                                                {stats[f as keyof typeof stats]} <span className="opacity-70">{f}</span>
+                                            <button
+                                                key={f}
+                                                onClick={() => setFilter(f as FilterType)}
+                                                className={`relative p-2 rounded-lg transition-all group ${isActive ? 'bg-stone-200 text-stone-900' : 'text-stone-400 hover:bg-stone-100 hover:text-stone-600'}`}
+                                                title={`${f.charAt(0).toUpperCase() + f.slice(1)} (${stats[f as keyof typeof stats]})`}
+                                            >
+                                                <Icon className="w-4 h-4" />
+                                                {/* Badge Count */}
+                                                {stats[f as keyof typeof stats] > 0 && (
+                                                    <span className={`absolute -top-1 -right-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-white text-[9px] font-bold shadow-sm border border-stone-100 px-0.5 ${isActive ? 'text-stone-900' : 'text-stone-500'}`}>
+                                                        {stats[f as keyof typeof stats]}
+                                                    </span>
+                                                )}
                                             </button>
                                         )
                                     })}
@@ -1271,11 +1291,11 @@ function AppContent() {
                                         onChange={(e) => {
                                             const val = e.target.value;
                                             setSearchQuery(val);
-                                            if (!val.trim()) setSearchResults(null); // FIX: Auto-clear results
+                                            if (!val.trim()) setSearchResults(null);
                                         }}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                        placeholder="Search by content..."
-                                        className="w-full pl-10 pr-10 py-2.5 bg-white border border-stone-200 rounded-xl text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-4 focus:ring-clay-500/5 focus:border-clay-400 transition-all shadow-sm group-hover:shadow-md"
+                                        placeholder="Search..."
+                                        className="w-full pl-10 pr-10 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-4 focus:ring-clay-500/5 focus:border-clay-400 transition-all shadow-sm group-hover:shadow-md"
                                     />
                                     {searchQuery ? (
                                         <button
@@ -1284,11 +1304,7 @@ function AppContent() {
                                         >
                                             <X className="w-3.5 h-3.5" />
                                         </button>
-                                    ) : (
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity">
-                                            <span className="text-[10px] font-bold text-stone-300 bg-stone-50 px-1.5 py-0.5 rounded border border-stone-100">ENTER</span>
-                                        </div>
-                                    )}
+                                    ) : null}
                                     {searchResults && (
                                         <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-stone-100 shadow-xl p-3 z-20 flex items-center justify-between animate-in slide-in-from-top-2 fade-in duration-200">
                                             <div className="flex items-center gap-2 text-xs font-medium text-stone-600">
@@ -1302,10 +1318,10 @@ function AppContent() {
                             </div>
 
                             {/* RIGHT ZONE: Actions & View */}
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-3">
                                 {/* View Controls Group */}
                                 <div className="hidden xl:flex items-center gap-2 p-1 bg-white rounded-xl border border-stone-200 shadow-sm">
-                                    <div className="flex items-center gap-2 px-3 border-r border-stone-100" title="Grid Density">
+                                    <div className="flex items-center gap-2 px-2 border-r border-stone-100" title="Grid Density">
                                         <Grip className="w-3.5 h-3.5 text-stone-400" />
                                         <input
                                             type="range"
@@ -1314,9 +1330,8 @@ function AppContent() {
                                             step={1}
                                             value={gridColumns}
                                             onChange={(e) => setGridColumns(parseInt(e.target.value, 10))}
-                                            className="w-16 accent-stone-900 h-1.5 bg-stone-100 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-stone-900"
+                                            className="w-12 accent-stone-900 h-1.5 bg-stone-100 rounded-lg appearance-none cursor-pointer"
                                         />
-                                        <span className="text-[10px] font-bold text-stone-500 tabular-nums w-4 text-center">{gridColumns}</span>
                                     </div>
                                     <button
                                         onClick={() => setIsMasonryView(!isMasonryView)}
@@ -1328,7 +1343,7 @@ function AppContent() {
                                 </div>
 
                                 {/* Primary Actions */}
-                                <div className="flex items-center gap-3 pl-2 border-l border-stone-200/50">
+                                <div className="flex items-center gap-2 pl-2 border-l border-stone-200/50">
                                     {currentProject.jobs && currentProject.jobs.length > 0 && (
                                         <button
                                             onClick={generatePdfForCurrentProject}
@@ -1340,9 +1355,8 @@ function AppContent() {
                                         </button>
                                     )}
 
-                                    <label className="groupcursor-pointer flex items-center gap-2.5 px-3 md:px-5 py-2.5 bg-stone-900 text-white rounded-xl shadow-lg shadow-stone-900/10 hover:shadow-stone-900/20 hover:bg-stone-800 active:scale-95 transition-all cursor-pointer">
+                                    <label className="group cursor-pointer flex items-center justify-center p-2.5 bg-stone-900 text-white rounded-xl shadow-lg shadow-stone-900/10 hover:shadow-stone-900/20 hover:bg-stone-800 active:scale-95 transition-all" title="Add Assets">
                                         <UploadCloud className="w-4 h-4 text-stone-300 group-hover:text-white transition-colors" />
-                                        <span className="text-xs font-bold uppercase tracking-wider font-heading hidden md:inline">Add Assets</span>
                                         <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileUpload} />
                                     </label>
                                 </div>
