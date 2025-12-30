@@ -33,7 +33,7 @@ const optionalSafeString = (maxLength: number = 1000) =>
 export const processRequestSchema = z.object({
     requestId: z.string().max(100).optional(),
     jobId: uuid,
-    model: z.enum(['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash']),
+    model: z.string().max(100), // Allow any model string (e.g. gemini-2.5-flash-image)
     systemPrompt: safeString(10000),
     userPrompt: safeString(10000),
     compressedImageData: z.string().optional(),
@@ -105,7 +105,7 @@ export type UploadImageRequest = z.infer<typeof uploadImageSchema>;
 
 export const createBatchSchema = z.object({
     projectId: uuid,
-    model: z.enum(['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash']),
+    model: z.string().max(100).optional(), // Make optional and allow string
 });
 
 export type CreateBatchRequest = z.infer<typeof createBatchSchema>;

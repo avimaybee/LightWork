@@ -141,3 +141,16 @@ export const mapGeminiError = (error: any): string => {
     if (msg.includes('API_KEY')) return 'Invalid API Key.';
     return 'Processing failed.';
 };
+
+// Deterministic Gradient for Avatars
+export const getGradient = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    // We want pleasing colors, so we stick to a certain lightness/saturation range
+    // HSL: 0-360, 70%, 60%
+    const c1 = `hsl(${hash % 360}, 70%, 60%)`;
+    const c2 = `hsl(${(hash + 40) % 360}, 70%, 60%)`;
+    return `linear-gradient(135deg, ${c1}, ${c2})`;
+};

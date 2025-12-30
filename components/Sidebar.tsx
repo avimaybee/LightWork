@@ -1,7 +1,9 @@
+```
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Project } from '../types';
-import { Plus, Settings, Command, Key, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, Box, LogOut, User, Loader2, Pin, PinOff } from 'lucide-react';
+import { Plus, Settings, Command, Key, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, Box, LogOut, User, Loader2, Pin, PinOff, Copy } from 'lucide-react';
 import { useAuth } from '../services/authContext';
+import { getGradient } from '../utils';
 
 interface SidebarProps {
   projects: Project[];
@@ -10,8 +12,9 @@ interface SidebarProps {
   onCreateProject: () => Promise<void>;
   onRenameProject?: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
-  currentView: 'workspace' | 'modules';
-  onChangeView: (view: 'workspace' | 'modules') => void;
+  onDuplicateProject?: (id: string) => void;
+  currentView: 'workspace' | 'modules' | 'settings';
+  onChangeView: (view: 'workspace' | 'modules' | 'settings') => void;
 }
 
 const ITEMS_PER_PAGE = 15;
@@ -25,6 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCreateProject,
   onRenameProject,
   onDeleteProject,
+  onDuplicateProject,
   currentView,
   onChangeView
 }) => {
@@ -160,10 +164,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div
-      className={`h-full bg-[#FDFCFB] border-r border-stone-200 flex flex-col flex-shrink-0 z-20 transition-all duration-300 relative group ease-in-out shadow-sm ${isCollapsed ? 'w-[72px]' : 'w-72'}`}
+      className={`h - full bg - [#FDFCFB] border - r border - stone - 200 flex flex - col flex - shrink - 0 z - 20 transition - all duration - 300 relative group ease -in -out shadow - sm ${ isCollapsed ? 'w-[72px]' : 'w-72' } `}
     >
       {/* Header - Height 64px (h-16) for standard alignment */}
-      <div className={`h-16 flex items-center border-b border-stone-200/50 shrink-0 transition-all relative ${isCollapsed ? 'justify-center px-0' : 'justify-between px-5'}`}>
+      <div className={`h - 16 flex items - center border - b border - stone - 200 / 50 shrink - 0 transition - all relative ${ isCollapsed ? 'justify-center px-0' : 'justify-between px-5' } `}>
         {!isCollapsed ? (
           <div className="flex items-center gap-3 text-stone-900 overflow-hidden">
             <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
@@ -180,7 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Toggle Button */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`text-stone-400 hover:text-stone-700 transition-colors ${isCollapsed ? 'absolute -right-3 top-12 bg-white border border-stone-200 shadow-sm rounded-full p-1 z-30' : ''}`}
+          className={`text - stone - 400 hover: text - stone - 700 transition - colors ${ isCollapsed ? 'absolute -right-3 top-12 bg-white border border-stone-200 shadow-sm rounded-full p-1 z-30' : '' } `}
           title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {isCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-4 h-4" />}
@@ -188,15 +192,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Primary Actions */}
-      <div className={`p-4 shrink-0 space-y-1.5 flex flex-col border-b border-stone-100/50 ${isCollapsed ? 'items-center px-2' : ''}`}>
+      <div className={`p - 4 shrink - 0 space - y - 1.5 flex flex - col border - b border - stone - 100 / 50 ${ isCollapsed ? 'items-center px-2' : '' } `}>
         <button
           onClick={handleCreateProject}
           disabled={isCreating}
           title="New Project"
           className={`
-            flex items-center rounded-lg font-heading font-medium text-stone-900 bg-white border border-stone-200 shadow-sm hover:border-stone-300 hover:shadow-md transition-all group h-9 disabled:opacity-50 disabled:cursor-not-allowed
-            ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}
-          `}
+            flex items - center rounded - lg font - heading font - medium text - stone - 900 bg - white border border - stone - 200 shadow - sm hover: border - stone - 300 hover: shadow - md transition - all group h - 9 disabled: opacity - 50 disabled: cursor - not - allowed
+            ${ isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm' }
+`}
         >
           <div className="w-4 h-4 flex items-center justify-center shrink-0">
             {isCreating ? (
@@ -212,12 +216,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => onChangeView('modules')}
           title="Module Library"
           className={`
-            flex items-center rounded-lg font-heading font-medium transition-all h-9
-            ${currentView === 'modules' ? 'bg-stone-100 text-stone-900' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-700'}
-            ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}
-          `}
+            flex items - center rounded - lg font - heading font - medium transition - all h - 9
+            ${ currentView === 'modules' ? 'bg-stone-100 text-stone-900' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-700' }
+            ${ isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm' }
+`}
         >
-          <Library className={`shrink-0 ${isCollapsed ? 'w-4 h-4' : 'w-4 h-4'}`} />
+          <Library className={`shrink - 0 ${ isCollapsed ? 'w-4 h-4' : 'w-4 h-4' } `} />
           {!isCollapsed && <span>Module Library</span>}
         </button>
       </div>
@@ -239,7 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Main Nav (Scrollable) */}
-      <div className={`flex-1 overflow-y-auto px-2 space-y-0.5 ${isCollapsed ? 'scrollbar-hide' : ''}`}>
+      <div className={`flex - 1 overflow - y - auto px - 2 space - y - 0.5 ${ isCollapsed ? 'scrollbar-hide' : '' } `}>
         {/* Pinned Projects (hide when searching) */}
         {!isCollapsed && !searchTerm && pinnedProjects.length > 0 && (
           <>
@@ -253,21 +257,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const isActive = currentProjectId === project.id && currentView === 'workspace';
               return (
                 <div
-                  key={`pinned-${project.id}`}
-                  className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive
-                    ? 'bg-clay-100 text-stone-900 border-l-2 border-clay-500'
-                    : 'text-stone-600 hover:bg-clay-50 hover:text-stone-900 border-l-2 border-transparent'
-                    }`}
+                  key={`pinned - ${ project.id } `}
+                  className={`group relative flex items - center rounded - lg transition - all duration - 200 ${
+  isActive
+    ? 'bg-clay-100 text-stone-900'
+    : 'text-stone-600 hover:bg-clay-50 hover:text-stone-900'
+} `}
                 >
+                  {/* Active Accent Bar */}
+                  {isActive && !isCollapsed && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-clay-500 shadow-sm" />
+                  )}
                   <button
                     onClick={() => onSelectProject(project.id)}
                     onDoubleClick={() => startEditing(project)}
-                    className={`flex items-center font-medium h-9 font-sans w-full gap-3 px-3 text-sm pr-16 ${isActive ? 'pl-5 font-semibold' : ''}`}
+                    className={`flex items - center font - medium h - 9 font - sans w - full gap - 3 px - 3 text - sm pr - 16 ${ isActive ? 'pl-5 font-semibold' : '' } `}
                   >
-                    <Pin className={`flex-shrink-0 w-3.5 h-3.5 transition-colors ${isActive ? 'text-clay-600' : 'text-clay-400 group-hover:text-clay-500'}`} />
+                    <Pin className={`flex - shrink - 0 w - 3.5 h - 3.5 transition - colors ${ isActive ? 'text-clay-600' : 'text-clay-400 group-hover:text-clay-500' } `} />
                     <span className="truncate text-left flex-1">{project.name}</span>
                     {project.jobs.length > 0 && (
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-clay-200 text-clay-700' : 'bg-clay-100 text-clay-500 group-hover:text-clay-600'}`}>
+                      <span className={`text - [9px] px - 1.5 py - 0.5 rounded - md font - medium transition - colors ${ isActive ? 'bg-clay-200 text-clay-700' : 'bg-clay-100 text-clay-500 group-hover:text-clay-600' } `}>
                         {project.jobs.length}
                       </span>
                     )}
@@ -312,10 +321,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <div
                   key={project.id}
-                  className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive
-                    ? 'bg-clay-50 text-stone-900 border-l-2 border-clay-500'
-                    : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900 border-l-2 border-transparent'
-                    } ${isCollapsed ? 'justify-center py-2' : ''}`}
+                  className={`group relative flex items - center rounded - lg transition - all duration - 200 ${
+  isActive
+    ? 'bg-clay-50 text-stone-900'
+    : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
+} ${ isCollapsed ? 'justify-center py-2' : '' } `}
                 >
                   {/* Active Accent Bar - improved visibility */}
                   {isActive && !isCollapsed && (
@@ -344,18 +354,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onDoubleClick={() => startEditing(project)}
                         title={isCollapsed ? project.name : undefined}
                         className={`
-                                            flex items-center font-medium h-9 font-sans
-                                            ${isCollapsed ? 'justify-center w-9 p-0 rounded-lg' : 'w-full gap-3 px-3 text-sm pr-16'}
-                                            ${isActive && !isCollapsed ? 'pl-5 font-semibold' : ''} 
-                                        `}
+                                            flex items - center font - medium h - 9 font - sans
+                                            ${ isCollapsed ? 'justify-center w-9 p-0 rounded-lg' : 'w-full gap-3 px-3 text-sm pr-16' }
+                                            ${ isActive && !isCollapsed ? 'pl-5 font-semibold' : '' }
+`}
                       >
-                        <History className={`flex-shrink-0 transition-colors ${isActive ? 'text-stone-900' : 'text-stone-500 group-hover:text-stone-600'} ${isCollapsed ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
+                        <History className={`flex - shrink - 0 transition - colors ${ isActive ? 'text-stone-900' : 'text-stone-500 group-hover:text-stone-600' } ${ isCollapsed ? 'w-4 h-4' : 'w-3.5 h-3.5' } `} />
 
                         {!isCollapsed && (
                           <>
                             <span className="truncate text-left flex-1">{project.name}</span>
                             {project.jobs.length > 0 && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-stone-200 text-stone-600' : 'bg-stone-100 text-stone-500 group-hover:text-stone-600'}`}>{project.jobs.length}</span>
+                              <span className={`text - [9px] px - 1.5 py - 0.5 rounded - md font - medium transition - colors ${ isActive ? 'bg-stone-200 text-stone-600' : 'bg-stone-100 text-stone-500 group-hover:text-stone-600' } `}>{project.jobs.length}</span>
                             )}
                           </>
                         )}
@@ -376,11 +386,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               <Pin className="w-3 h-3" />
                             </button>
                           )}
+                          {/* Duplicate button */}
+                          {onDuplicateProject && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onDuplicateProject(project.id); }}
+                              className="p-1.5 text-stone-300 hover:text-stone-600 hover:bg-stone-50 rounded-md transition-colors"
+                              title="Duplicate Project"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          )}
                           {/* Delete button */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onDeleteProject(project.id);
+                              if (confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
+                                onDeleteProject(project.id);
+                              }
                             }}
                             className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                             title="Delete Project"
@@ -401,7 +423,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Footer - User Profile */}
-      <div className={`border-t border-stone-100 bg-[#FDFCFB] shrink-0 ${isCollapsed ? 'p-2' : 'p-4'}`}>
+      <div className={`border - t border - stone - 100 bg - [#FDFCFB] shrink - 0 ${ isCollapsed ? 'p-2' : 'p-4' } `}>
         <UserProfile isCollapsed={isCollapsed} />
       </div>
     </div>
@@ -429,8 +451,9 @@ function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
       <div className="flex flex-col items-center gap-2">
         <button
           onClick={handleSignOut}
-          title={`Sign out (${userEmail})`}
-          className="w-9 h-9 rounded-full bg-gradient-to-br from-clay-400 to-clay-600 flex items-center justify-center text-white font-heading font-bold text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all"
+          title={`Sign out(${ userEmail })`}
+          className="w-9 h-9 rounded-full flex items-center justify-center text-white font-heading font-bold text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all"
+          style={{ background: user.photoURL ? 'transparent' : getGradient(userName) }}
         >
           {user.photoURL ? (
             <img src={user.photoURL} alt="" className="w-full h-full rounded-full object-cover" loading="lazy" decoding="async" />
@@ -446,7 +469,10 @@ function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
     <div className="space-y-3">
       {/* User Info */}
       <div className="flex items-center gap-3 px-2">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-clay-400 to-clay-600 flex items-center justify-center text-white font-heading font-bold text-sm shadow-md shrink-0">
+        <div 
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white font-heading font-bold text-sm shadow-md shrink-0"
+            style={{ background: user.photoURL ? 'transparent' : getGradient(userName) }}
+        >
           {user.photoURL ? (
             <img src={user.photoURL} alt="" className="w-full h-full rounded-full object-cover" loading="lazy" decoding="async" />
           ) : (
@@ -458,6 +484,21 @@ function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
           <p className="text-[10px] text-stone-500 truncate">{userEmail}</p>
         </div>
       </div>
+
+      {/* Settings Button */}
+      <button
+        onClick={() => {
+          // Traverse up to find the onChangeView handler passed to sidebar
+          // This component logic is getting tricky with props drilling
+          // Ideally we pass onSettings to UserProfile or use context
+          const event = new CustomEvent('lightwork:navigate-settings');
+          window.dispatchEvent(event);
+        }}
+        className="flex items-center gap-2.5 w-full px-3 h-9 text-xs font-semibold text-stone-500 hover:text-stone-900 hover:bg-stone-50 transition-colors rounded-lg font-sans mb-1"
+      >
+        <Settings className="w-3.5 h-3.5" />
+        <span>Settings</span>
+      </button>
 
       {/* Sign Out Button */}
       <button

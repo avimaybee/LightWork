@@ -23,13 +23,13 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         }
 
         const rawBody = await context.request.json();
-        
+
         // Validate input with Zod schema
         const validation = validateRequest(createBatchSchema, rawBody);
         if (!validation.success) {
             return jsonResponse({ error: validation.error }, 400);
         }
-        
+
         const { projectId, model } = validation.data;
 
         // Verify project ownership
@@ -105,7 +105,12 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
 
     } catch (e: any) {
         console.error('[Batch Create] Error:', e);
-        return new Response(JSON.stringify({ error: e.message }), {
+        // Return full error details for debugging (remove in production later)
+        return new Response(JSON.stringify({
+            error: e.message || 'Unknown error',
+            stack: e.stack,
+            details: JSON.stringify(e)
+        }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' }
         });

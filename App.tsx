@@ -25,6 +25,8 @@ const LazyModulesManager = React.lazy(() => import('./components/ModulesManager'
 const LazyBatchStatusPanel = React.lazy(() => import('./components/BatchStatusPanel').then(m => ({ default: m.BatchStatusPanel })));
 const LazyBackToTop = React.lazy(() => import('./components/BackToTop').then(m => ({ default: m.BackToTop })));
 const LazyBulkActionToolbar = React.lazy(() => import('./components/BulkActionToolbar').then(m => ({ default: m.BulkActionToolbar })));
+const LazySettingsPage = React.lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Tier 1 Optimized Settings
 // With paid Tier 1 limits (500 RPM, 500K TPM), we can process much faster
@@ -32,7 +34,7 @@ const MAX_CONCURRENT_JOBS = 5;  // Process 5 images in parallel
 const MIN_GEMINI_REQUEST_SPACING_MS = 500; // 500ms between requests (~120 RPM safe rate)
 const PARALLEL_BATCH_SIZE = 10; // Send up to 10 images per parallel API call
 
-type AppView = 'workspace' | 'modules';
+type AppView = 'workspace' | 'modules' | 'settings';
 type FilterType = 'all' | 'ready' | 'done' | 'failed';
 
 // Sortable wrapper for ImageCard (drag-to-reorder)
@@ -88,8 +90,9 @@ function AppContent() {
     const [lightboxData, setLightboxData] = useState<{ url: string, original?: string } | null>(null);
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [toasts, setToasts] = useState<ToastMsg[]>([]);
-    const [gridColumns, setGridColumns] = useState(3);
+    const [gridColumns, setGridColumns] = useState(4);
     const [isMasonryView, setIsMasonryView] = useState(false);
+    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false); // Mobile search state
     const [filter, setFilter] = useState<FilterType>('all');
     const [apiMode, setApiMode] = useState<ApiMode>('fast');
 
@@ -126,7 +129,14 @@ function AppContent() {
         projectsRef.current = projects;
     }, [projects]);
 
-    // --- Initial Data Fetch ---
+    // Event Listeners
+    useEffect(() => {
+        const onNavigateSettings = () => setCurrentView('settings');
+        window.addEventListener('lightwork:navigate-settings', onNavigateSettings);
+        return () => window.removeEventListener('lightwork:navigate-settings', onNavigateSettings);
+    }, []);
+
+    // Initial Data Fetch
     useEffect(() => {
         const init = async () => {
             try {
@@ -326,141 +336,64 @@ function AppContent() {
     const selectedJobs = (currentProject.jobs || []).filter(j => j.selected);
     const queuedCount = (currentProject.jobs || []).filter(j => j.status === 'queued' || j.status === 'error' || j.status === 'paused').length;
 
-    // QoL #2: Keyboard Shortcuts
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            const active = document.activeElement as HTMLElement | null;
-            const tag = active?.tagName?.toLowerCase();
-            const isTypingTarget = tag === 'input' || tag === 'textarea' || (active?.getAttribute?.('contenteditable') === 'true');
-
-            const key = e.key.toLowerCase();
-            const isMod = e.ctrlKey || e.metaKey;
-
-            // Escape: Close lightbox or clear selection
-            if (key === 'escape' && !isTypingTarget) {
-                if (lightboxData) {
-                    setLightboxData(null);
-                } else if (selectedJobs.length > 0) {
-                    clearSelection();
-                }
-                return;
+    // QoL #2: Keyboard Shortcuts (Refactored)
+    useKeyboardShortcuts({
+        currentView,
+        hasSelection: selectedJobs.length > 0,
+        isProcessing,
+        queuedCount,
+        apiMode,
+        lightboxOpen: !!lightboxData,
+        onEscape: () => {
+            if (lightboxData) setLightboxData(null);
+            else if (selectedJobs.length > 0) clearSelection();
+        },
+        onDelete: () => {
+            if (selectedJobs.length > 0) handleBulkDelete();
+        },
+        onSelectAll: selectAllVisible,
+        onProcess: () => {
+            if (!isProcessing && queuedCount > 0) {
+                if (apiMode === 'economy') handleProcessBatchRef.current();
+                else processQueueRef.current();
             }
-
-            // Space: Open lightbox for first selected image
-            if (key === ' ' && !isTypingTarget && selectedJobs.length > 0) {
-                e.preventDefault();
+        },
+        onSpace: () => {
+            if (selectedJobs.length > 0) {
                 const first = selectedJobs[0];
                 setLightboxData({ url: first.resultUrl || first.thumbnailUrl, original: first.originalUrl });
-                return;
+            }
+        },
+        onNavigate: (direction) => {
+            const jobs = currentProject?.jobs || [];
+            if (jobs.length === 0) return;
+
+            const currentIndex = lastSelectedId.current
+                ? jobs.findIndex(j => j.id === lastSelectedId.current)
+                : -1;
+
+            let newIndex = currentIndex;
+            switch (direction) {
+                case 'left':
+                    newIndex = currentIndex <= 0 ? jobs.length - 1 : currentIndex - 1;
+                    break;
+                case 'right':
+                    newIndex = currentIndex >= jobs.length - 1 ? 0 : currentIndex + 1;
+                    break;
+                case 'up':
+                    newIndex = Math.max(0, currentIndex - gridColumns);
+                    break;
+                case 'down':
+                    newIndex = Math.min(jobs.length - 1, currentIndex + gridColumns);
+                    break;
             }
 
-            // Delete/Backspace: Remove selected images with undo
-            if ((key === 'delete' || key === 'backspace') && !isTypingTarget && selectedJobs.length > 0) {
-                e.preventDefault();
-                const jobsToDelete = [...selectedJobs];
-                const ids = jobsToDelete.map(j => j.id);
-                const count = ids.length;
-
-                // Immediately remove from UI (optimistic)
-                setProjects(prev => prev.map(p =>
-                    p.id === currentProjectId
-                        ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) }
-                        : p
-                ));
-                clearSelection();
-
-                // Show undo toast with delayed backend deletion
-                let undone = false;
-                const toastId = toast(`${count} image${count > 1 ? 's' : ''} deleted`, {
-                    duration: 10000,
-                    action: {
-                        label: 'Undo',
-                        onClick: () => {
-                            undone = true;
-                            // Restore deleted jobs to UI
-                            setProjects(prev => prev.map(p =>
-                                p.id === currentProjectId
-                                    ? { ...p, jobs: [...p.jobs, ...jobsToDelete] }
-                                    : p
-                            ));
-                            toast.success('Restored!', { duration: 2000 });
-                        },
-                    },
-                });
-
-                // Delay actual backend deletion to allow undo
-                setTimeout(async () => {
-                    if (!undone) {
-                        await Promise.allSettled(ids.map(id => api.deleteImage(id)));
-                    }
-                }, 10000);
-
-                return;
+            const newJob = jobs[newIndex];
+            if (newJob) {
+                handleJobClick(newJob.id, false, false);
             }
-
-            // Only process workspace-specific shortcuts in workspace view
-            if (currentView !== 'workspace') return;
-            if (isTypingTarget) return;
-
-            // Arrow key navigation for image grid
-            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
-                e.preventDefault();
-                const jobs = currentProject?.jobs || [];
-                if (jobs.length === 0) return;
-
-                const currentIndex = lastSelectedId.current
-                    ? jobs.findIndex(j => j.id === lastSelectedId.current)
-                    : -1;
-
-                let newIndex = currentIndex;
-                switch (key) {
-                    case 'arrowleft':
-                        newIndex = currentIndex <= 0 ? jobs.length - 1 : currentIndex - 1;
-                        break;
-                    case 'arrowright':
-                        newIndex = currentIndex >= jobs.length - 1 ? 0 : currentIndex + 1;
-                        break;
-                    case 'arrowup':
-                        newIndex = Math.max(0, currentIndex - gridColumns);
-                        break;
-                    case 'arrowdown':
-                        newIndex = Math.min(jobs.length - 1, currentIndex + gridColumns);
-                        break;
-                }
-
-                const newJob = jobs[newIndex];
-                if (newJob) {
-                    handleJobClick(newJob.id, false, false);
-                }
-                return;
-            }
-
-            // Ctrl/Cmd + A: Select all visible
-            if (isMod && key === 'a') {
-                e.preventDefault();
-                selectAllVisible();
-                return;
-            }
-
-            // Ctrl/Cmd + Enter: Run batch
-            if (isMod && key === 'enter') {
-                e.preventDefault();
-                if (!isProcessing && queuedCount > 0) {
-                    if (apiMode === 'economy') {
-                        // Trigger batch processing
-                        handleProcessBatchRef.current();
-                    } else {
-                        // Trigger real-time processing
-                        processQueueRef.current();
-                    }
-                }
-                return;
-            }
-        };
-
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [currentView, selectAllVisible, lightboxData, selectedJobs, clearSelection, confirm, currentProjectId, isProcessing, queuedCount, apiMode]);
+        }
+    });
 
     const stopUploadProgress = useCallback((jobId: string) => {
         const timerId = uploadProgressTimersRef.current[jobId];
@@ -546,10 +479,21 @@ function AppContent() {
             variant: 'danger',
         });
         if (!confirmed) return;
+        setProjects(prev => prev.filter(p => p.id !== id));
+        if (currentProjectId === id && projects.length > 0) {
+            const next = projects.find(p => p.id !== id);
+            if (next) setCurrentProjectId(next.id);
+        }
         await api.deleteProject(id);
-        const newProjects = projects.filter(p => p.id !== id);
-        setProjects(newProjects);
-        if (currentProjectId === id) setCurrentProjectId(newProjects[0].id);
+    };
+
+    const handleDuplicateProject = async (id: string) => {
+        const toastId = toast.loading('Duplicating project...');
+        await api.duplicateProject(id);
+        const updated = await api.getProjects();
+        setProjects(updated);
+        toast.dismiss(toastId);
+        toast.success('Project duplicated');
     };
 
     const processFiles = async (files: File[]) => {
@@ -1243,137 +1187,170 @@ function AppContent() {
                 onSelectProject={(id) => { setCurrentProjectId(id); setCurrentView('workspace'); clearSelection(); }}
                 onCreateProject={async () => { const newP = await api.createProject(`Session #${projects.length + 1}`); if (newP) { setProjects([newP, ...projects]); setCurrentProjectId(newP.id); setCurrentView('workspace'); } }}
                 onRenameProject={(id, name) => { setProjects(prev => prev.map(p => p.id === id ? { ...p, name } : p)); api.updateProject(id, { name }); }}
-                onDeleteProject={deleteProject} currentView={currentView} onChangeView={setCurrentView}
+                onRenameProject={(id, name) => { setProjects(prev => prev.map(p => p.id === id ? { ...p, name } : p)); api.updateProject(id, { name }); }}
+                onDeleteProject={deleteProject} currentView={currentView} onChangeView={setCurrentView} onDuplicateProject={handleDuplicateProject}
             />
 
             {currentView === 'modules' ? (
                 <Suspense fallback={null}>
                     <LazyModulesManager modules={modules} onCreate={handleCreateModule} onDelete={handleDeleteModule} onUpdate={() => { }} onBack={() => setCurrentView('workspace')} />
                 </Suspense>
+            ) : currentView === 'settings' ? (
+                <Suspense fallback={null}>
+                    <LazySettingsPage onBack={() => setCurrentView('workspace')} />
+                </Suspense>
             ) : (
                 <div className="flex-1 flex overflow-hidden">
                     <main className="flex-1 relative flex flex-col h-full overflow-hidden transition-all bg-[#F2F0E9]" onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}>
-                        {/* Header Height Adjusted to h-16 (64px) with px-6 for better alignment */}
-                        <div className="h-16 flex items-center justify-between px-6 border-b border-stone-200/50 bg-[#F2F0E9]/80 backdrop-blur-md z-10 shrink-0">
-                            <div className="flex items-center gap-6">
-                                {isHeaderEditing ? (
-                                    <input ref={headerInputRef} type="text" value={headerTempName} onChange={(e) => setHeaderTempName(e.target.value)} onBlur={saveHeaderRename} onKeyDown={(e) => e.key === 'Enter' && saveHeaderRename()} className="text-xl font-heading font-bold tracking-tight text-stone-900 bg-transparent border-b-2 border-clay-500 focus:outline-none min-w-[240px]" placeholder="Session Name" />
-                                ) : (
-                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={startHeaderRename} title="Rename"><h1 className="text-xl font-heading font-bold tracking-tight text-stone-900 truncate max-w-[400px]">{currentProject.name}</h1><Edit2 className="w-3.5 h-3.5 text-stone-300 group-hover:text-stone-500 transition-colors" /></div>
-                                )}
+                        {/* Header: Redesigned for Elegance per Plan */}
+                        <div className="h-20 flex items-center justify-between px-8 border-b border-stone-200/50 bg-[#F2F0E9]/80 backdrop-blur-md z-10 shrink-0 gap-8 relative">
 
-                                <div className="h-4 w-px bg-stone-300/50 hidden sm:block" />
-
-                                <div className="items-center gap-2 hidden sm:flex">
-                                    {['all', 'ready', 'done', 'failed'].map(f => {
-                                        if (f === 'failed' && stats.failed === 0) return null;
-                                        return (
-                                            <button key={f} onClick={() => setFilter(f as FilterType)} className={`flex items-center gap-1 px-2 py-0.5 rounded-full border shadow-sm transition-all ${filter === f ? 'bg-stone-800 text-white border-stone-800' : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300'}`}>
-                                                <span className="text-[9px] font-bold uppercase tracking-wide font-heading">{stats[f as keyof typeof stats]} {f}</span>
-                                            </button>
-                                        )
-                                    })}
-                                </div>
-
-                                {/* AI Search Bar */}
-                                <div className="hidden md:flex items-center gap-1 relative">
-                                    <div className="relative">
+                            {/* MOBILE SEARCH OVERLAY */}
+                            {isMobileSearchOpen && (
+                                <div className="absolute inset-0 bg-[#F2F0E9] z-20 flex items-center px-4 md:hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="relative w-full flex items-center gap-3">
+                                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                                         <input
                                             type="text"
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                            placeholder="AI Search..."
-                                            className="w-48 pl-8 pr-8 py-1.5 text-xs bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-clay-500/20 focus:border-clay-400 transition-all"
+                                            placeholder="Search assets..."
+                                            autoFocus
+                                            className="w-full pl-10 pr-10 py-2.5 bg-white border border-stone-200 rounded-xl text-sm text-stone-700 focus:outline-none focus:ring-4 focus:ring-clay-500/5 focus:border-clay-400 shadow-lg"
                                         />
-                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
-                                        {searchQuery && (
-                                            <button
-                                                onClick={clearSearch}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
+                                        <button
+                                            onClick={() => setIsMobileSearchOpen(false)}
+                                            className="p-2 bg-white border border-stone-200 rounded-xl text-stone-500 hover:text-stone-900 shadow-sm whitespace-nowrap text-xs font-bold"
+                                        >
+                                            Cancel
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={handleSearch}
-                                        disabled={isSearching || !searchQuery.trim()}
-                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold bg-gradient-to-r from-clay-500 to-clay-600 text-white rounded-lg shadow-sm hover:shadow-md disabled:opacity-50 transition-all"
-                                    >
-                                        {isSearching ? (
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        ) : (
-                                            <Sparkles className="w-3.5 h-3.5" />
-                                        )}
-                                    </button>
+                                </div>
+                            )}
+
+                            {/* LEFT ZONE: Context & Discovery */}
+                            <div className="flex items-center gap-6 min-w-0">
+                                {/* Mobile Search Toggle */}
+                                <button
+                                    onClick={() => setIsMobileSearchOpen(true)}
+                                    className="md:hidden p-2 text-stone-400 hover:text-stone-900 hover:bg-white rounded-lg transition-colors"
+                                >
+                                    <Search className="w-5 h-5" />
+                                </button>
+
+                                {isHeaderEditing ? (
+                                    <input ref={headerInputRef} type="text" value={headerTempName} onChange={(e) => setHeaderTempName(e.target.value)} onBlur={saveHeaderRename} onKeyDown={(e) => e.key === 'Enter' && saveHeaderRename()} className="text-xl font-heading font-bold tracking-tight text-stone-900 bg-transparent border-b-2 border-clay-500 focus:outline-none min-w-[120px] md:min-w-[200px]" placeholder="Session Name" />
+                                ) : (
+                                    <div className="flex items-center gap-3 group cursor-pointer min-w-0" onClick={startHeaderRename} title="Rename">
+                                        <h1 className="text-xl font-heading font-bold tracking-tight text-stone-900 truncate max-w-[200px] md:max-w-[320px]">{currentProject.name}</h1>
+                                        <Edit2 className="w-3.5 h-3.5 text-stone-300 group-hover:text-stone-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0 hidden md:block" />
+                                    </div>
+                                )}
+
+                                <div className="h-6 w-px bg-stone-300/30 hidden lg:block" />
+
+                                <div className="items-center gap-2 hidden lg:flex">
+                                    {['all', 'ready', 'done', 'failed'].map(f => {
+                                        if (f === 'failed' && stats.failed === 0) return null;
+                                        return (
+                                            <button key={f} onClick={() => setFilter(f as FilterType)} className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all border ${filter === f ? 'bg-stone-800 text-white border-stone-800 shadow-sm' : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300'}`}>
+                                                {stats[f as keyof typeof stats]} <span className="opacity-70">{f}</span>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* CENTER ZONE: Global Search */}
+                            <div className="hidden md:flex flex-1 justify-center max-w-lg">
+                                <div className="relative group w-full">
+                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 group-focus-within:text-clay-500 transition-colors" />
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setSearchQuery(val);
+                                            if (!val.trim()) setSearchResults(null); // FIX: Auto-clear results
+                                        }}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                        placeholder="Search by content..."
+                                        className="w-full pl-10 pr-10 py-2.5 bg-white border border-stone-200 rounded-xl text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-4 focus:ring-clay-500/5 focus:border-clay-400 transition-all shadow-sm group-hover:shadow-md"
+                                    />
+                                    {searchQuery ? (
+                                        <button
+                                            onClick={clearSearch}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600 rounded-full hover:bg-stone-100 transition-colors"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    ) : (
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity">
+                                            <span className="text-[10px] font-bold text-stone-300 bg-stone-50 px-1.5 py-0.5 rounded border border-stone-100">ENTER</span>
+                                        </div>
+                                    )}
                                     {searchResults && (
-                                        <span className="text-[10px] text-stone-500 font-bold">
-                                            {searchResults.length} match{searchResults.length !== 1 ? 'es' : ''}
-                                        </span>
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-stone-100 shadow-xl p-3 z-20 flex items-center justify-between animate-in slide-in-from-top-2 fade-in duration-200">
+                                            <div className="flex items-center gap-2 text-xs font-medium text-stone-600">
+                                                <Sparkles className="w-3.5 h-3.5 text-clay-500" />
+                                                Found {searchResults.length} matches
+                                            </div>
+                                            <button onClick={clearSearch} className="text-[10px] font-bold text-stone-400 hover:text-stone-600 uppercase tracking-wider">Clear</button>
+                                        </div>
                                     )}
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                                {currentProject.jobs && currentProject.jobs.length > 0 && (
+                            {/* RIGHT ZONE: Actions & View */}
+                            <div className="flex items-center gap-4">
+                                {/* View Controls Group */}
+                                <div className="hidden xl:flex items-center gap-2 p-1 bg-white rounded-xl border border-stone-200 shadow-sm">
+                                    <div className="flex items-center gap-2 px-3 border-r border-stone-100" title="Grid Density">
+                                        <Grip className="w-3.5 h-3.5 text-stone-400" />
+                                        <input
+                                            type="range"
+                                            min={2}
+                                            max={6}
+                                            step={1}
+                                            value={gridColumns}
+                                            onChange={(e) => setGridColumns(parseInt(e.target.value, 10))}
+                                            className="w-16 accent-stone-900 h-1.5 bg-stone-100 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-stone-900"
+                                        />
+                                        <span className="text-[10px] font-bold text-stone-500 tabular-nums w-4 text-center">{gridColumns}</span>
+                                    </div>
                                     <button
-                                        onClick={generatePdfForCurrentProject}
-                                        disabled={isGeneratingPdf}
-                                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-stone-600 bg-white hover:bg-stone-50 rounded-lg border border-stone-200 shadow-sm disabled:opacity-50"
-                                        title="Generate PDF Report"
+                                        onClick={() => setIsMasonryView(!isMasonryView)}
+                                        className={`p-1.5 rounded-lg transition-colors ${isMasonryView ? 'bg-stone-100 text-stone-900' : 'text-stone-400 hover:text-stone-600 hover:bg-stone-50'}`}
+                                        title={isMasonryView ? 'Switch to Grid View' : 'Switch to Masonry View'}
                                     >
-                                        {isGeneratingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
-                                        <span>PDF</span>
+                                        {isMasonryView ? <Columns className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
                                     </button>
-                                )}
-
-                                {currentProject.jobs && currentProject.jobs.length > 0 && (
-                                    <button
-                                        onClick={selectAllVisible}
-                                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-stone-600 bg-white hover:bg-stone-50 rounded-lg border border-stone-200 shadow-sm"
-                                        title="Select All (Ctrl+A)"
-                                    >
-                                        <BoxSelect className="w-3.5 h-3.5" />
-                                        <span>Select All</span>
-                                    </button>
-                                )}
-
-                                {currentProject.jobs && currentProject.jobs.length > 0 && <button onClick={clearAllJobs} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Clear All"><Trash2 className="w-4 h-4" /></button>}
-                                {currentProject.jobs && currentProject.jobs.some(j => j.status === 'error' || j.status === 'paused') && <button onClick={retryFailed} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-stone-600 bg-white hover:bg-stone-50 rounded-lg border border-stone-200 shadow-sm"><RefreshCw className="w-3.5 h-3.5" /><span>Retry</span></button>}
-
-                                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-stone-200 shadow-sm" title="Grid Density">
-                                    <Grip className="w-3.5 h-3.5 text-stone-400" />
-                                    <input
-                                        type="range"
-                                        min={2}
-                                        max={6}
-                                        step={1}
-                                        value={gridColumns}
-                                        onChange={(e) => setGridColumns(parseInt(e.target.value, 10))}
-                                        className="w-20 accent-stone-900"
-                                        aria-label="Grid density"
-                                    />
-                                    <span className="text-xs font-bold text-stone-500 tabular-nums w-6">{gridColumns}col</span>
                                 </div>
 
-                                {/* Masonry Toggle */}
-                                <button
-                                    onClick={() => setIsMasonryView(!isMasonryView)}
-                                    className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm transition-colors ${isMasonryView
-                                        ? 'bg-stone-900 border-stone-900 text-white'
-                                        : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50'
-                                        }`}
-                                    title={isMasonryView ? 'Switch to Grid View' : 'Switch to Masonry View'}
-                                >
-                                    {isMasonryView ? <Columns className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
-                                </button>
+                                {/* Primary Actions */}
+                                <div className="flex items-center gap-3 pl-2 border-l border-stone-200/50">
+                                    {currentProject.jobs && currentProject.jobs.length > 0 && (
+                                        <button
+                                            onClick={generatePdfForCurrentProject}
+                                            disabled={isGeneratingPdf}
+                                            className="p-2.5 text-stone-500 bg-white hover:bg-stone-50 hover:text-red-600 rounded-xl border border-stone-200 shadow-sm transition-all active:scale-95 disabled:opacity-50 hidden sm:block"
+                                            title="Export PDF Report"
+                                        >
+                                            {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                                        </button>
+                                    )}
 
-                                <label className="group cursor-pointer flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 rounded-lg hover:border-clay-400 hover:shadow-md hover:shadow-clay-500/5 active:scale-95 transition-all h-9"><UploadCloud className="w-4 h-4 text-stone-500 group-hover:text-clay-600" /><span className="text-xs font-bold uppercase tracking-wide text-stone-700 font-heading">Add Assets</span><input type="file" multiple accept="image/*" className="hidden" onChange={handleFileUpload} /></label>
+                                    <label className="groupcursor-pointer flex items-center gap-2.5 px-3 md:px-5 py-2.5 bg-stone-900 text-white rounded-xl shadow-lg shadow-stone-900/10 hover:shadow-stone-900/20 hover:bg-stone-800 active:scale-95 transition-all cursor-pointer">
+                                        <UploadCloud className="w-4 h-4 text-stone-300 group-hover:text-white transition-colors" />
+                                        <span className="text-xs font-bold uppercase tracking-wider font-heading hidden md:inline">Add Assets</span>
+                                        <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileUpload} />
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
-                        <div ref={gridContainerRef} className="flex-1 overflow-y-auto p-10 pb-40 scroll-smooth" onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}>
+                        <div ref={gridContainerRef} className="flex-1 overflow-y-auto p-4 md:p-10 pb-40 scroll-smooth" onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}>
                             {(currentProject.jobs || []).length === 0 ? (
                                 <EmptyState type="workspace" />
                             ) : isMasonryView ? (
@@ -1410,7 +1387,7 @@ function AppContent() {
                                 /* Standard Grid Layout with Drag-to-Reorder */
                                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                                     <SortableContext items={renderedJobs.map(j => j.id)} strategy={rectSortingStrategy}>
-                                        <div className="grid gap-8 pb-24" style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}>
+                                        <div className="grid gap-4 md:gap-8 pb-24" style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}>
                                             {renderedJobs.map(job => {
                                                 const isSearchMatch = !searchResults || searchResults.includes(job.id);
                                                 return (
@@ -1460,7 +1437,7 @@ function AppContent() {
                         </Suspense>
                     </main>
 
-                    {selectedJobs.length === 1 && (
+                    {selectedJobs.length > 0 && ( // FIX: Show inspector for ANY selection count
                         <Suspense fallback={null}>
                             <LazyInspector
                                 selectedJobs={selectedJobs}

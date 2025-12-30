@@ -18,7 +18,7 @@ const useMediaQuery = (query: string) => {
     useEffect(() => {
         const mediaQuery = window.matchMedia(query);
         const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
-        
+
         mediaQuery.addEventListener('change', handler);
         return () => mediaQuery.removeEventListener('change', handler);
     }, [query]);
@@ -57,7 +57,7 @@ export const Inspector: React.FC<InspectorProps> = ({
 
     // Responsive: detect screens < 1200px for drawer mode
     const isSmallScreen = useMediaQuery('(max-width: 1199px)');
-    
+
     // Auto-collapse on small screens
     useEffect(() => {
         if (isSmallScreen && selectedJobs.length > 0) {
@@ -214,182 +214,182 @@ export const Inspector: React.FC<InspectorProps> = ({
                         <PanelRightClose className="w-5 h-5" />
                     </button>
                 )}
-                
+
                 {/* Backdrop for drawer mode */}
                 {isSmallScreen && !isCollapsed && (
-                    <div 
+                    <div
                         className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-20 animate-in fade-in duration-200"
                         onClick={() => setIsCollapsed(true)}
                     />
                 )}
-                
+
                 <div className={`
                     ${isSmallScreen ? 'fixed right-0 top-0 bottom-0 z-30' : ''} 
                     ${isSmallScreen && isCollapsed ? 'translate-x-full' : 'translate-x-0'}
                     w-96 max-w-[90vw] h-full bg-[#FDFCFB] border-l border-stone-200 flex flex-col shadow-2xl z-30 transition-transform duration-300 ease-out font-sans
                 `}>
-                <div className="h-20 px-8 border-b border-stone-100 flex items-center justify-between shrink-0 bg-[#FDFCFB]">
-                    <span className="font-bold text-xl text-stone-900 font-heading">Inspector</span>
-                    <div className="flex items-center gap-1">
-                        {isSmallScreen && (
-                            <button 
-                                onClick={() => setIsCollapsed(true)} 
-                                className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-900 transition-colors"
-                                title="Collapse Panel"
-                            >
-                                <PanelRightOpen className="w-5 h-5" />
-                            </button>
-                        )}
-                        <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-900 transition-colors">
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                    {/* Preview */}
-                    <div className="space-y-4">
-                        <div
-                            className="aspect-square bg-white rounded-lg p-2 border border-stone-200 shadow-sm relative group cursor-zoom-in"
-                            onClick={() => onZoom(job.resultUrl || job.thumbnailUrl)}
-                        >
-                            <div className="w-full h-full relative overflow-hidden rounded-sm">
-                                <img src={job.resultUrl || job.thumbnailUrl} className="w-full h-full object-cover" alt="Preview" loading="lazy" decoding="async" />
-                                <div className="absolute inset-0 bg-stone-900/0 group-hover:bg-stone-900/10 transition-colors flex items-center justify-center">
-                                    <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 drop-shadow-md transform scale-95 group-hover:scale-100 transition-all" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                            <div className="flex flex-col gap-1 min-w-0">
-                                <h3 className="text-sm font-bold text-stone-900 truncate font-sans" title={job.fileName}>{job.fileName}</h3>
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${job.status === 'completed' ? 'bg-status-success-bg text-status-success-text' :
-                                        job.status === 'error' ? 'bg-status-error-bg text-status-error-text' :
-                                            (job.status === 'processing' || job.status === 'batch_processing') ? 'bg-status-processing-bg text-status-processing-text' :
-                                                job.status === 'batch_pending' ? 'bg-status-warning-bg text-status-warning-text' :
-                                                'bg-status-pending-bg text-status-pending-text'
-                                        }`}>
-                                        {job.status}
-                                    </span>
-                                </div>
-                            </div>
-                            <button onClick={handleSmartRename} disabled={isRenaming} className="p-2 text-stone-400 hover:text-clay-600 hover:bg-clay-50 rounded-lg transition-colors" title="Smart Rename">
-                                {isRenaming ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-                            </button>
-                        </div>
-                    </div>
-
-                    {isAiFailed && aiError && (
-                        <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
-                            <div className="flex items-start gap-3">
-                                <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
-                                <div className="min-w-0">
-                                    <div className="text-xs font-bold text-red-700 uppercase tracking-widest">{aiError.title}</div>
-                                    <div className="text-xs text-red-700/90 font-medium leading-relaxed mt-1">{aiError.detail}</div>
-                                    {aiError.raw && (
-                                        <div className="text-[10px] text-red-700/70 font-medium mt-2 wrap-break-word">{aiError.raw}</div>
-                                    )}
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => onRetry([job.id])}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-700 rounded-lg text-xs font-bold hover:bg-red-50 border border-red-200 hover:border-red-300 transition-colors"
-                            >
-                                <RefreshCcw className="w-3.5 h-3.5" /> Retry
-                            </button>
-                        </div>
-                    )}
-
-                    <hr className="border-stone-100" />
-
-                    {/* Prompt */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Terminal className="w-4 h-4 text-stone-400" />
-                                <label className="text-xs font-bold text-stone-400 uppercase tracking-widest">Adjustment Prompt</label>
-                            </div>
-                            <div className="flex gap-1">
-                                <button 
-                                    onClick={() => {
-                                        if (job.localPrompt) {
-                                            navigator.clipboard.writeText(job.localPrompt);
-                                            setJustCopied(true);
-                                            setTimeout(() => setJustCopied(false), 2000);
-                                        }
-                                    }} 
-                                    disabled={!job.localPrompt} 
-                                    className="p-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-50 rounded-md transition-colors disabled:opacity-50" 
-                                    title="Copy Prompt"
+                    <div className="h-20 px-8 border-b border-stone-200 flex items-center justify-between shrink-0 bg-[#FDFCFB]">
+                        <span className="font-bold text-xl text-stone-900 font-heading">Inspector</span>
+                        <div className="flex items-center gap-1">
+                            {isSmallScreen && (
+                                <button
+                                    onClick={() => setIsCollapsed(true)}
+                                    className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-900 transition-colors"
+                                    title="Collapse Panel"
                                 >
-                                    {justCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                                </button>
-                                <button onClick={handleAutoDraft} disabled={isAutoDrafting} className="p-1.5 text-stone-400 hover:text-clay-600 hover:bg-clay-50 rounded-md transition-colors disabled:opacity-50" title="Auto-Draft">
-                                    {isAutoDrafting ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <ScanEye className="w-3.5 h-3.5" />}
-                                </button>
-                                <button onClick={handleEnhance} disabled={isEnhancing || !job.localPrompt} className="p-1.5 text-stone-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors disabled:opacity-50" title="Magic Polish">
-                                    {isEnhancing ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                                </button>
-                            </div>
-                        </div>
-                        <textarea
-                            value={job.localPrompt}
-                            onChange={(e) => onUpdateJob(job.id, { localPrompt: e.target.value })}
-                            placeholder="Describe specific changes for this image..."
-                            className="w-full h-32 bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 resize-none font-medium leading-relaxed font-sans"
-                        />
-                    </div>
-
-                    <hr className="border-stone-100" />
-
-                    {/* Actions */}
-                    <div className="space-y-4">
-                        <label className="text-xs font-bold text-stone-400 uppercase tracking-widest flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-stone-300" />
-                            Actions
-                        </label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button onClick={downloadImage} disabled={!job.resultUrl} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-stone-900 text-white rounded-lg text-xs font-bold hover:bg-stone-800 transition-colors disabled:opacity-50 shadow-sm">
-                                <Download className="w-3.5 h-3.5" /> Download
-                            </button>
-                            <button onClick={copyImage} disabled={!job.resultUrl} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-stone-200 text-stone-700 rounded-lg text-xs font-bold hover:border-stone-300 transition-colors disabled:opacity-50 shadow-sm">
-                                {justCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Clipboard className="w-3.5 h-3.5" />} {justCopied ? 'Copied' : 'Copy'}
-                            </button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            {isUploadFailed ? (
-                                <button onClick={() => onRetryUpload(job.id)} className="flex items-center justify-center gap-2 px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors border border-transparent hover:border-stone-200">
-                                    <RefreshCcw className="w-3.5 h-3.5" /> Try Again
-                                </button>
-                            ) : (
-                                <button onClick={() => onRetry([job.id])} className="flex items-center justify-center gap-2 px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors border border-transparent hover:border-stone-200">
-                                    <RefreshCcw className="w-3.5 h-3.5" /> {isAiFailed ? 'Retry' : 'Re-run'}
+                                    <PanelRightOpen className="w-5 h-5" />
                                 </button>
                             )}
-                            <button 
-                                onClick={async () => { 
-                                    const confirmed = await confirm({
-                                        title: 'Delete Image',
-                                        message: 'Are you sure you want to delete this image? This action cannot be undone.',
-                                        confirmLabel: 'Delete',
-                                        variant: 'danger',
-                                    });
-                                    if (confirmed) {
-                                        onRemove([job.id]); 
-                                        onClose(); 
-                                    }
-                                }} 
-                                className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 border border-stone-200 hover:border-red-100 transition-colors"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                            <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-900 transition-colors">
+                                <X className="w-5 h-5" />
                             </button>
                         </div>
                     </div>
+
+                    <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                        {/* Preview */}
+                        <div className="space-y-4">
+                            <div
+                                className="aspect-square bg-white rounded-xl p-2 border border-stone-200 shadow-sm relative group cursor-zoom-in"
+                                onClick={() => onZoom(job.resultUrl || job.thumbnailUrl)}
+                            >
+                                <div className="w-full h-full relative overflow-hidden rounded-sm">
+                                    <img src={job.resultUrl || job.thumbnailUrl} className="w-full h-full object-cover" alt="Preview" loading="lazy" decoding="async" />
+                                    <div className="absolute inset-0 bg-stone-900/0 group-hover:bg-stone-900/10 transition-colors flex items-center justify-center">
+                                        <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 drop-shadow-md transform scale-95 group-hover:scale-100 transition-all" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <div className="flex flex-col gap-1 min-w-0">
+                                    <h3 className="text-sm font-bold text-stone-900 truncate font-sans" title={job.fileName}>{job.fileName}</h3>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${job.status === 'completed' ? 'bg-status-success-bg text-status-success-text' :
+                                            job.status === 'error' ? 'bg-status-error-bg text-status-error-text' :
+                                                (job.status === 'processing' || job.status === 'batch_processing') ? 'bg-status-processing-bg text-status-processing-text' :
+                                                    job.status === 'batch_pending' ? 'bg-status-warning-bg text-status-warning-text' :
+                                                        'bg-status-pending-bg text-status-pending-text'
+                                            }`}>
+                                            {job.status}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button onClick={handleSmartRename} disabled={isRenaming} className="p-2 text-stone-400 hover:text-clay-600 hover:bg-clay-50 rounded-lg transition-colors" title="Smart Rename">
+                                    {isRenaming ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {isAiFailed && aiError && (
+                            <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+                                <div className="flex items-start gap-3">
+                                    <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-bold text-red-700 uppercase tracking-widest">{aiError.title}</div>
+                                        <div className="text-xs text-red-700/90 font-medium leading-relaxed mt-1">{aiError.detail}</div>
+                                        {aiError.raw && (
+                                            <div className="text-[10px] text-red-700/70 font-medium mt-2 wrap-break-word">{aiError.raw}</div>
+                                        )}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => onRetry([job.id])}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-700 rounded-lg text-xs font-bold hover:bg-red-50 border border-red-200 hover:border-red-300 transition-colors"
+                                >
+                                    <RefreshCcw className="w-3.5 h-3.5" /> Retry
+                                </button>
+                            </div>
+                        )}
+
+                        <hr className="border-stone-100" />
+
+                        {/* Prompt */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Terminal className="w-4 h-4 text-stone-400" />
+                                    <label className="text-xs font-bold text-stone-400 uppercase tracking-widest">Adjustment Prompt</label>
+                                </div>
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={() => {
+                                            if (job.localPrompt) {
+                                                navigator.clipboard.writeText(job.localPrompt);
+                                                setJustCopied(true);
+                                                setTimeout(() => setJustCopied(false), 2000);
+                                            }
+                                        }}
+                                        disabled={!job.localPrompt}
+                                        className="p-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-50 rounded-md transition-colors disabled:opacity-50"
+                                        title="Copy Prompt"
+                                    >
+                                        {justCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button onClick={handleAutoDraft} disabled={isAutoDrafting} className="p-1.5 text-stone-400 hover:text-clay-600 hover:bg-clay-50 rounded-md transition-colors disabled:opacity-50" title="Auto-Draft">
+                                        {isAutoDrafting ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <ScanEye className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button onClick={handleEnhance} disabled={isEnhancing || !job.localPrompt} className="p-1.5 text-stone-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors disabled:opacity-50" title="Magic Polish">
+                                        {isEnhancing ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea
+                                value={job.localPrompt}
+                                onChange={(e) => onUpdateJob(job.id, { localPrompt: e.target.value })}
+                                placeholder="Describe specific changes for this image..."
+                                className="w-full h-32 bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 resize-none font-medium leading-relaxed font-sans"
+                            />
+                        </div>
+
+                        <hr className="border-stone-100" />
+
+                        {/* Actions */}
+                        <div className="space-y-4">
+                            <label className="text-xs font-bold text-stone-400 uppercase tracking-widest flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-stone-300" />
+                                Actions
+                            </label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={downloadImage} disabled={!job.resultUrl} className="flex items-center justify-center gap-2 px-4 py-3 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-stone-800 transition-all active:scale-95 disabled:opacity-50 shadow-md">
+                                    <Download className="w-3.5 h-3.5" /> Download
+                                </button>
+                                <button onClick={copyImage} disabled={!job.resultUrl} className="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-stone-200 text-stone-700 rounded-xl text-xs font-bold hover:border-stone-300 hover:bg-stone-50 transition-all active:scale-95 disabled:opacity-50 shadow-sm">
+                                    {justCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Clipboard className="w-3.5 h-3.5" />} {justCopied ? 'Copied' : 'Copy'}
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                {isUploadFailed ? (
+                                    <button onClick={() => onRetryUpload(job.id)} className="flex items-center justify-center gap-2 px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors border border-transparent hover:border-stone-200">
+                                        <RefreshCcw className="w-3.5 h-3.5" /> Try Again
+                                    </button>
+                                ) : (
+                                    <button onClick={() => onRetry([job.id])} className="flex items-center justify-center gap-2 px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors border border-transparent hover:border-stone-200">
+                                        <RefreshCcw className="w-3.5 h-3.5" /> {isAiFailed ? 'Retry' : 'Re-run'}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={async () => {
+                                        const confirmed = await confirm({
+                                            title: 'Delete Image',
+                                            message: 'Are you sure you want to delete this image? This action cannot be undone.',
+                                            confirmLabel: 'Delete',
+                                            variant: 'danger',
+                                        });
+                                        if (confirmed) {
+                                            onRemove([job.id]);
+                                            onClose();
+                                        }
+                                    }}
+                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 border border-stone-200 hover:border-red-100 transition-colors"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <ConfirmDialog />
                 </div>
-                <ConfirmDialog />
-            </div>
             </>
         );
     }
@@ -491,53 +491,52 @@ export const Inspector: React.FC<InspectorProps> = ({
                     <PanelRightClose className="w-5 h-5" />
                 </button>
             )}
-            
+
             {/* Backdrop for drawer mode */}
             {isSmallScreen && !isCollapsed && (
-                <div 
+                <div
                     className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-20 animate-in fade-in duration-200"
                     onClick={() => setIsCollapsed(true)}
                 />
             )}
-            
-        <div className={`
+
+            <div className={`
             ${isSmallScreen ? 'fixed right-0 top-0 bottom-0 z-30' : ''} 
             ${isSmallScreen && isCollapsed ? 'translate-x-full' : 'translate-x-0'}
-            w-96 max-w-[90vw] h-full bg-[#FDFCFB] border-l border-stone-200 flex flex-col shadow-2xl z-30 transition-transform duration-300 ease-out font-sans
+            w-96 max-w-[90vw] h-full bg-[#FDFCFB] border-l border-stone-200 flex flex-col shadow-2xl z-30 transition-transform duration-300 ease-out font-sans rounded-l-2xl border-l-2
         `}>
-            <div className="h-20 px-8 border-b border-stone-100 flex items-center justify-between shrink-0 bg-stone-900 text-[#FDFCFB]">
-                <div className="flex items-center gap-3">
-                    <BoxSelect className="w-5 h-5 text-clay-300" />
-                    <span className="font-medium text-xl font-heading">{selectedJobs.length} Selected</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    {isSmallScreen && (
-                        <button 
-                            onClick={() => setIsCollapsed(true)} 
-                            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                            title="Collapse Panel"
-                        >
-                            <PanelRightOpen className="w-5 h-5" />
+                <div className="h-20 px-8 border-b border-stone-200 flex items-center justify-between shrink-0 bg-stone-900 text-[#FDFCFB]">
+                    <div className="flex items-center gap-3">
+                        <BoxSelect className="w-5 h-5 text-clay-300" />
+                        <span className="font-medium text-xl font-heading">{selectedJobs.length} Selected</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        {isSmallScreen && (
+                            <button
+                                onClick={() => setIsCollapsed(true)}
+                                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                                title="Collapse Panel"
+                            >
+                                <PanelRightOpen className="w-5 h-5" />
+                            </button>
+                        )}
+                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                            <X className="w-5 h-5" />
                         </button>
-                    )}
-                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-                        <X className="w-5 h-5" />
-                    </button>
+                    </div>
                 </div>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                {/* Batch Visuals */}
-                <div className="grid grid-cols-4 gap-2">
-                    {selectedJobs.slice(0, 11).map(j => (
-                        <div key={j.id} className="aspect-square bg-stone-100 rounded overflow-hidden relative border border-stone-200">
-                            <img src={j.thumbnailUrl} className="w-full h-full object-cover opacity-80" alt="" loading="lazy" decoding="async" />
-                            {j.status === 'completed' && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-tl shadow-sm" />}
-                        </div>
-                    ))}
-                    {selectedJobs.length > 11 && (
-                        <div className="aspect-square bg-stone-100 rounded flex items-center justify-center text-xs font-bold text-stone-400 border border-stone-200">
-                            +{selectedJobs.length - 11}
+                <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                    {/* Batch Visuals */}
+                    <div className="grid grid-cols-4 gap-2">
+                        {selectedJobs.slice(0, 11).map(j => (
+                            <div key={j.id} className="aspect-square bg-stone-100 rounded overflow-hidden relative border border-stone-200">
+                                <img src={j.thumbnailUrl} className="w-full h-full object-cover opacity-80" alt="" loading="lazy" decoding="async" />
+                                {j.status === 'completed' && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-tl shadow-sm" />}
+                            </div>
+                        ))}
+                        {selectedJobs.length > 11 && (
+                            +{ selectedJobs.length - 11 }
                         </div>
                     )}
                 </div>
@@ -626,8 +625,8 @@ export const Inspector: React.FC<InspectorProps> = ({
                         <button onClick={() => onRetry(selectedJobs.map(j => j.id))} className="flex items-center justify-center gap-2 px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors border border-transparent hover:border-stone-200">
                             <RefreshCcw className="w-3.5 h-3.5" /> Re-run
                         </button>
-                        <button 
-                            onClick={async () => { 
+                        <button
+                            onClick={async () => {
                                 const confirmed = await confirm({
                                     title: `Delete ${selectedJobs.length} Images`,
                                     message: `Are you sure you want to delete ${selectedJobs.length} selected images? This action cannot be undone.`,
@@ -635,10 +634,10 @@ export const Inspector: React.FC<InspectorProps> = ({
                                     variant: 'danger',
                                 });
                                 if (confirmed) {
-                                    onRemove(selectedJobs.map(j => j.id)); 
-                                    onClose(); 
+                                    onRemove(selectedJobs.map(j => j.id));
+                                    onClose();
                                 }
-                            }} 
+                            }}
                             className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 border border-stone-200 hover:border-red-100 transition-colors"
                         >
                             <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -647,7 +646,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                 </div>
             </div>
             <ConfirmDialog />
-        </div>
+        </div >
         </>
     );
 };

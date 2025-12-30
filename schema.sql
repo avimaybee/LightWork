@@ -87,3 +87,12 @@ CREATE TABLE IF NOT EXISTS batch_items (
 CREATE INDEX IF NOT EXISTS idx_batch_jobs_user ON batch_jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_batch_jobs_status ON batch_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_batch_items_batch ON batch_items(batch_id);
+
+-- Favorites table (User stored pinned modules)
+CREATE TABLE IF NOT EXISTS favorites (
+    user_id TEXT REFERENCES users(id),
+    module_id TEXT NOT NULL,
+    created_at INTEGER,
+    PRIMARY KEY (user_id, module_id)
+);
+CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);

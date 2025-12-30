@@ -2,7 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Project, Module, ApiMode } from '../types';
 import { Zap, Wand2, Layers, Cpu, Maximize2, Minimize2, Save, Settings, Grid, Terminal, ChevronDown, ChevronUp, Coins, Star } from 'lucide-react';
+import { Zap, Wand2, Layers, Cpu, Maximize2, Minimize2, Save, Settings, Grid, Terminal, ChevronDown, ChevronUp, Coins, Star } from 'lucide-react';
 import { Tooltip, HelpTooltip, HELP_CONTENT } from './Tooltip';
+import { useFavorites } from '../hooks/useFavorites';
 
 interface CommandDockProps {
     project: Project;
@@ -35,55 +37,8 @@ export const CommandDock: React.FC<CommandDockProps> = ({
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
-    // Core Feature #18: Favorite Modules (local)
-    const FAVORITES_KEY = 'lightwork_favorite_module_ids';
-    const loadFavorites = (): Set<string> => {
-        try {
-            const raw = localStorage.getItem(FAVORITES_KEY);
-            const parsed = raw ? JSON.parse(raw) : [];
-            if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === 'string'));
-            return new Set();
-        } catch {
-            return new Set();
-        }
-    };
-    const [favoriteIds, setFavoriteIds] = useState<Set<string>>(loadFavorites);
-
-    useEffect(() => {
-        const sync = () => setFavoriteIds(loadFavorites());
-        const onStorage = (e: StorageEvent) => {
-            if (e.key === FAVORITES_KEY) sync();
-        };
-        window.addEventListener('storage', onStorage);
-        window.addEventListener('lightwork:favorites' as any, sync as any);
-        return () => {
-            window.removeEventListener('storage', onStorage);
-            window.removeEventListener('lightwork:favorites' as any, sync as any);
-        };
-    }, []);
-
-    const saveFavorites = (next: Set<string>) => {
-        try {
-            localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(next)));
-        } catch {
-            // ignore
-        }
-        setFavoriteIds(new Set(next));
-        try {
-            window.dispatchEvent(new Event('lightwork:favorites'));
-        } catch {
-            // ignore
-        }
-    };
-
-    const toggleFavorite = (id: string) => {
-        const next = new Set(favoriteIds);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        saveFavorites(next);
-    };
-
-    const isFavorite = (id: string) => favoriteIds.has(id);
+    // Core Feature #18: Favorite Modules (Synced via D1)
+    const { favoriteIds, toggleFavorite, isFavorite } = useFavorites();
 
     // Custom Dropdown State
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -401,7 +356,7 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                                         <span>⏱️</span>
                                         <span>
                                             {apiMode === 'economy'
-                                                ? `~5-30 min (batch queue)`
+                                                ? `Results in < 24h`
                                                 : `~${Math.ceil(queuedCount * 3 / 60)} min (${queuedCount} × 3s)`}
                                         </span>
                                     </div>
@@ -409,8 +364,8 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                                         <span>💰</span>
                                         <span>
                                             {apiMode === 'economy'
-                                                ? `~$${(queuedCount * 0.001).toFixed(3)} (50% off)`
-                                                : `~$${(queuedCount * 0.002).toFixed(3)}`}
+                                                ? `~$${(queuedCount * 0.0195).toFixed(4)}`
+                                                : `~$${(queuedCount * 0.039).toFixed(4)}`}
                                         </span>
                                     </div>
                                 </div>

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Module, DEFAULT_MODULES } from '../types';
-import { ArrowLeft, Plus, Trash2, Edit3, Save, X, LayoutGrid, Check, Terminal, Star, Search, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit3, Save, X, LayoutGrid, Check, Terminal, Star, Search, RotateCcw, Sparkles, RefreshCcw } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit3, Save, X, LayoutGrid, Check, Terminal, Star, Search, RotateCcw, Sparkles, RefreshCcw } from 'lucide-react';
+import { enhancePrompt } from '../services/geminiService';
+import { useFavorites } from '../hooks/useFavorites';
 
 interface ModulesManagerProps {
     modules: Module[];
@@ -14,27 +17,30 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
     const [isCreating, setIsCreating] = useState(false);
     const [newName, setNewName] = useState('');
     const [newPrompt, setNewPrompt] = useState('');
-    
+
     // Detail / Edit View State
     const [selectedModule, setSelectedModule] = useState<Module | null>(null);
     const [editPrompt, setEditPrompt] = useState('');
-    
+
     // Search State
     const [searchTerm, setSearchTerm] = useState('');
 
-    const FAVORITES_KEY = 'lightwork_favorite_module_ids';
-    const CUSTOM_OVERRIDES_KEY = 'lightwork_module_overrides';
-    
-    const loadFavorites = (): Set<string> => {
-        try {
-            const raw = localStorage.getItem(FAVORITES_KEY);
-            const parsed = raw ? JSON.parse(raw) : [];
-            if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === 'string'));
-            return new Set();
-        } catch {
-            return new Set();
+    const [isEnhancing, setIsEnhancing] = useState(false);
+
+    const handleEnhance = async (currentText: string, setText: (s: string) => void) => {
+        if (!currentText.trim()) return;
+        setIsEnhancing(true);
+        const res = await enhancePrompt(currentText);
+        if (res.success && res.result) {
+            setText(res.result);
         }
+        setIsEnhancing(false);
     };
+
+    const { favoriteIds, toggleFavorite, isFavorite } = useFavorites();
+
+    const CUSTOM_OVERRIDES_KEY = 'lightwork_module_overrides';
+
 
     // Load custom overrides for system modules
     const loadOverrides = (): Record<string, string> => {
@@ -46,22 +52,9 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
         }
     };
 
-    const [favoriteIds, setFavoriteIds] = useState<Set<string>>(loadFavorites);
     const [moduleOverrides, setModuleOverrides] = useState<Record<string, string>>(loadOverrides);
 
-    const saveFavorites = (next: Set<string>) => {
-        try {
-            localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(next)));
-        } catch {
-            // ignore storage failures
-        }
-        setFavoriteIds(new Set(next));
-        try {
-            window.dispatchEvent(new Event('lightwork:favorites'));
-        } catch {
-            // ignore
-        }
-    };
+
 
     const saveOverride = (moduleId: string, prompt: string) => {
         const newOverrides = { ...moduleOverrides, [moduleId]: prompt };
@@ -93,14 +86,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
         return moduleId in moduleOverrides;
     };
 
-    const toggleFavorite = (id: string) => {
-        const next = new Set(favoriteIds);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        saveFavorites(next);
-    };
 
-    const isFavorite = (id: string) => favoriteIds.has(id);
 
     // Apply overrides to modules for display
     const getModulePrompt = (module: Module): string => {
@@ -128,7 +114,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
         });
 
     const handleCreate = () => {
-        if(newName && newPrompt) {
+        if (newName && newPrompt) {
             onCreate(newName, newPrompt);
             setNewName('');
             setNewPrompt('');
@@ -168,7 +154,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
         <div className="flex-1 h-full flex flex-col bg-[#F2F0E9] overflow-hidden relative font-sans">
             {/* Header */}
             <div className="h-20 flex items-center px-10 border-b border-stone-200 bg-[#F2F0E9]/80 backdrop-blur-md shrink-0">
-                <button 
+                <button
                     onClick={onBack}
                     className="flex items-center gap-2 text-stone-500 hover:text-stone-900 transition-colors mr-6"
                 >
@@ -176,7 +162,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                     <span className="font-bold text-sm">Back</span>
                 </button>
                 <h1 className="text-2xl font-bold text-stone-900 font-heading">Module Library</h1>
-                
+
                 {/* Search Bar */}
                 <div className="ml-auto relative max-w-xs w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
@@ -201,9 +187,9 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-10">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                    
+
                     {/* Create New Card */}
-                    <div 
+                    <div
                         onClick={() => setIsCreating(true)}
                         className="border border-dashed border-stone-300 rounded-xl p-8 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all hover:border-clay-400 hover:bg-white/50 group h-full min-h-[280px]"
                     >
@@ -215,8 +201,8 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
 
                     {/* Module Cards */}
                     {orderedModules.map(module => (
-                        <div 
-                            key={module.id} 
+                        <div
+                            key={module.id}
                             onClick={() => openModule(module)}
                             className="bg-[#FDFCFB] rounded-xl border border-stone-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full min-h-[280px] relative group overflow-hidden cursor-pointer hover:-translate-y-1"
                         >
@@ -242,7 +228,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                         <Star className="w-4 h-4" fill={isFavorite(module.id) ? 'currentColor' : 'none'} />
                                     </button>
                                     {module.isCustom && (
-                                        <button 
+                                        <button
                                             onClick={(e) => { e.stopPropagation(); onDelete(module.id); }}
                                             className="text-stone-300 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-red-50"
                                             title="Delete"
@@ -256,7 +242,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                             {/* Card Body */}
                             <div className="p-6 flex-1 flex flex-col relative">
                                 <div className="relative flex-1">
-                                    <p 
+                                    <p
                                         className="text-xs text-stone-600 font-mono leading-relaxed overflow-hidden h-28"
                                         style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}
                                     >
@@ -303,23 +289,33 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                 </button>
                             </div>
                         </div>
-                        
+
                         {/* Modal Body */}
                         <div className="flex-1 p-8 flex flex-col gap-3 bg-[#FDFCFB]">
-                             <div className="flex items-center justify-between">
-                                 <label className="text-xs font-bold text-stone-400 uppercase tracking-widest font-mono">System Prompt</label>
-                                 {!selectedModule.isCustom && hasOverride(selectedModule.id) && (
-                                     <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-bold border border-amber-200">Modified from default</span>
-                                 )}
-                             </div>
-                             <textarea 
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <label className="text-xs font-bold text-stone-400 uppercase tracking-widest font-mono">System Prompt</label>
+                                    <button
+                                        onClick={() => handleEnhance(editPrompt, setEditPrompt)}
+                                        disabled={isEnhancing || !editPrompt.trim()}
+                                        className="text-stone-400 hover:text-purple-600 transition-colors p-1"
+                                        title="Enhance with AI"
+                                    >
+                                        {isEnhancing ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                    </button>
+                                </div>
+                                {!selectedModule.isCustom && hasOverride(selectedModule.id) && (
+                                    <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-bold border border-amber-200">Modified from default</span>
+                                )}
+                            </div>
+                            <textarea
                                 value={editPrompt}
                                 onChange={(e) => setEditPrompt(e.target.value)}
                                 className="flex-1 w-full bg-stone-50 border border-stone-200 rounded-xl p-6 text-sm font-mono text-stone-700 leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-stone-900/5 focus:border-stone-400"
                                 placeholder="Enter detailed system instructions..."
                                 spellCheck={false}
                                 autoFocus
-                             />
+                            />
                         </div>
 
                         {/* Modal Footer */}
@@ -329,7 +325,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                     {editPrompt.length} characters
                                 </span>
                                 {!selectedModule.isCustom && (
-                                    <button 
+                                    <button
                                         onClick={revertToDefault}
                                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-stone-500 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
                                         title="Revert to default prompt"
@@ -340,13 +336,13 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                 )}
                             </div>
                             <div className="flex items-center gap-3">
-                                <button 
+                                <button
                                     onClick={() => setSelectedModule(null)}
                                     className="px-5 py-2.5 text-stone-500 hover:text-stone-900 font-bold text-sm transition-colors font-sans"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     onClick={saveChanges}
                                     className="px-6 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg font-bold text-sm shadow-lg shadow-stone-900/10 flex items-center gap-2 transition-all font-sans"
                                 >
@@ -380,13 +376,13 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                 <X className="w-6 h-6 text-stone-400" />
                             </button>
                         </div>
-                        
+
                         {/* Modal Body */}
                         <div className="p-8 flex flex-col gap-6 bg-[#FDFCFB]">
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-stone-400 uppercase tracking-widest font-mono">Module Name</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     value={newName}
                                     onChange={e => setNewName(e.target.value)}
                                     placeholder="e.g., Product Cleanup, Portrait Pro..."
@@ -395,8 +391,18 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                 />
                             </div>
                             <div className="space-y-2 flex-1">
-                                <label className="text-xs font-bold text-stone-400 uppercase tracking-widest font-mono">System Prompt</label>
-                                <textarea 
+                                <div className="flex items-center gap-2">
+                                    <label className="text-xs font-bold text-stone-400 uppercase tracking-widest font-mono">System Prompt</label>
+                                    <button
+                                        onClick={() => handleEnhance(newPrompt, setNewPrompt)}
+                                        disabled={isEnhancing || !newPrompt.trim()}
+                                        className="text-stone-400 hover:text-purple-600 transition-colors p-1"
+                                        title="Enhance with AI"
+                                    >
+                                        {isEnhancing ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                    </button>
+                                </div>
+                                <textarea
                                     value={newPrompt}
                                     onChange={e => setNewPrompt(e.target.value)}
                                     placeholder="Enter detailed system instructions for this module..."
@@ -412,13 +418,13 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                 {newPrompt.length} characters
                             </div>
                             <div className="flex items-center gap-3">
-                                <button 
+                                <button
                                     onClick={() => { setIsCreating(false); setNewName(''); setNewPrompt(''); }}
                                     className="px-5 py-2.5 text-stone-500 hover:text-stone-900 font-bold text-sm transition-colors font-sans"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleCreate}
                                     disabled={!newName.trim() || !newPrompt.trim()}
                                     className="px-6 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg font-bold text-sm shadow-lg shadow-stone-900/10 flex items-center gap-2 transition-all font-sans disabled:opacity-50 disabled:cursor-not-allowed"

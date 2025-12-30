@@ -99,6 +99,26 @@ export const api = {
         });
     },
 
+    duplicateProject: async (id: string): Promise<Project | null> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/projects/${id}/duplicate`, {
+                method: 'POST',
+                headers: authHeaders
+            });
+            if (!res.ok) throw new Error("Failed to duplicate");
+            const data = await res.json();
+            // Fetch full project data to return correct type
+            // Or just return partial? App.tsx expects the object to append to list.
+            // Let's re-fetch the single project or just reload all.
+            // For now, let's return null and let app reload all.
+            return null;
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
+    },
+
     // Images
     uploadImage: async (projectId: string, file: File): Promise<ImageJob | null> => {
         try {
@@ -364,5 +384,52 @@ export const api = {
             return null;
         }
     }
+},
+    // Favorites
+    getFavorites: async (): Promise<string[]> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/favorites`, {
+                headers: authHeaders
+            });
+            if (!res.ok) return [];
+            return await res.json();
+        } catch (e) {
+            console.error("Failed to fetch favorites", e);
+            return [];
+        }
+    },
+
+        addFavorite: async (moduleId: string): Promise<boolean> => {
+            try {
+                const authHeaders = await getAuthHeaders();
+                const res = await fetch(`${API_BASE}/favorites`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...authHeaders
+                    },
+                    body: JSON.stringify({ moduleId })
+                });
+                return res.ok;
+            } catch (e) {
+                console.error("Failed to add favorite", e);
+                return false;
+            }
+        },
+
+            removeFavorite: async (moduleId: string): Promise<boolean> => {
+                try {
+                    const authHeaders = await getAuthHeaders();
+                    const res = await fetch(`${API_BASE}/favorites?moduleId=${moduleId}`, {
+                        method: 'DELETE',
+                        headers: authHeaders
+                    });
+                    return res.ok;
+                } catch (e) {
+                    console.error("Failed to remove favorite", e);
+                    return false;
+                }
+            }
 };
 
