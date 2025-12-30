@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Project, Module, ApiMode } from '../types';
 import { Zap, Wand2, Layers, Cpu, Maximize2, Minimize2, Save, Settings, Grid, Terminal, ChevronDown, ChevronUp, Coins, Star } from 'lucide-react';
-import { HelpTooltip, HELP_CONTENT } from './Tooltip';
+import { Tooltip, HelpTooltip, HELP_CONTENT } from './Tooltip';
 
 interface CommandDockProps {
     project: Project;
@@ -148,43 +148,43 @@ export const CommandDock: React.FC<CommandDockProps> = ({
         >
             {/* Expanded System Context */}
             <AnimatePresence>
-            {isExpanded && (
-                <motion.div
-                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                    className="w-full bg-[#FDFCFB]/95 backdrop-blur-xl border border-stone-200/80 border-b-0 rounded-t-xl p-6 shadow-2xl shadow-stone-900/10 mb-[-12px] pb-8 z-0">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-stone-100 rounded-md">
-                                <Layers className="w-4 h-4 text-stone-600" />
+                {isExpanded && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                        className="w-full bg-[#FDFCFB]/95 backdrop-blur-xl border border-stone-200/80 border-b-0 rounded-t-xl p-6 shadow-2xl shadow-stone-900/10 mb-[-12px] pb-8 z-0">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-1.5 bg-stone-100 rounded-md">
+                                    <Layers className="w-4 h-4 text-stone-600" />
+                                </div>
+                                <div>
+                                    <span className="text-xs font-bold text-stone-900 block font-heading">System Context</span>
+                                    <span className="text-[11px] text-stone-500 block">Global instructions for this project</span>
+                                </div>
                             </div>
-                            <div>
-                                <span className="text-xs font-bold text-stone-900 block font-heading">System Context</span>
-                                <span className="text-[11px] text-stone-500 block">Global instructions for this session</span>
+                            <div className="flex items-center gap-2">
+                                <button onClick={handleSaveModule} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-stone-200 hover:border-stone-300 rounded-lg text-xs font-semibold text-stone-700 transition-colors shadow-sm">
+                                    <Save className="w-3.5 h-3.5" />
+                                    Save Preset
+                                </button>
+                                <button onClick={() => setIsExpanded(false)} className="text-stone-400 hover:text-stone-600 p-2 hover:bg-stone-100 rounded-lg transition-colors">
+                                    <Minimize2 className="w-4 h-4" />
+                                </button>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={handleSaveModule} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-stone-200 hover:border-stone-300 rounded-lg text-xs font-semibold text-stone-700 transition-colors shadow-sm">
-                                <Save className="w-3.5 h-3.5" />
-                                Save Preset
-                            </button>
-                            <button onClick={() => setIsExpanded(false)} className="text-stone-400 hover:text-stone-600 p-2 hover:bg-stone-100 rounded-lg transition-colors">
-                                <Minimize2 className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
 
-                    <textarea
-                        value={project.modulePrompt}
-                        onChange={(e) => onUpdateProject({ modulePrompt: e.target.value })}
-                        className="w-full h-40 bg-white border border-stone-200 rounded-lg p-3 text-sm font-mono text-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-900/5 focus:border-stone-400 resize-none shadow-inner leading-relaxed"
-                        placeholder="Enter detailed global instructions here..."
-                        autoFocus
-                    />
-                </motion.div>
-            )}
+                        <textarea
+                            value={project.modulePrompt}
+                            onChange={(e) => onUpdateProject({ modulePrompt: e.target.value })}
+                            className="w-full h-40 bg-white border border-stone-200 rounded-lg p-3 text-sm font-mono text-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-900/5 focus:border-stone-400 resize-none shadow-inner leading-relaxed"
+                            placeholder="Enter detailed global instructions here..."
+                            autoFocus
+                        />
+                    </motion.div>
+                )}
             </AnimatePresence>
 
             {/* Main Control Bar */}
@@ -392,37 +392,66 @@ export const CommandDock: React.FC<CommandDockProps> = ({
 
                 {/* ACTION BUTTON */}
                 <div className="pl-4">
-                    <button
-                        onClick={apiMode === 'economy' ? onProcessBatch : onProcess}
-                        disabled={isProcessing || queuedCount === 0}
-                        title={apiMode === 'economy' ? 'Submit batch job (50% cheaper)' : 'Cmd+Enter to run'}
-                        className={`
-                    h-10 px-6 rounded-xl font-heading font-bold text-sm tracking-wide flex items-center justify-center gap-2.5 transition-all shadow-md whitespace-nowrap
-                    ${isProcessing
-                                ? 'bg-stone-100 text-stone-400 cursor-not-allowed shadow-none border border-stone-200'
-                                : apiMode === 'economy'
-                                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-lg active:scale-95 border border-emerald-600'
-                                    : 'bg-stone-900 text-[#FDFCFB] hover:bg-stone-800 hover:shadow-lg active:scale-95 border border-stone-900'
-                            }
-                `}
+                    <Tooltip
+                        content={
+                            queuedCount > 0 ? (
+                                <div className="space-y-1.5 min-w-[180px]">
+                                    <div className="font-bold text-white">Estimated Processing</div>
+                                    <div className="flex items-center gap-2 text-stone-300">
+                                        <span>⏱️</span>
+                                        <span>
+                                            {apiMode === 'economy'
+                                                ? `~5-30 min (batch queue)`
+                                                : `~${Math.ceil(queuedCount * 3 / 60)} min (${queuedCount} × 3s)`}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-stone-300">
+                                        <span>💰</span>
+                                        <span>
+                                            {apiMode === 'economy'
+                                                ? `~$${(queuedCount * 0.001).toFixed(3)} (50% off)`
+                                                : `~$${(queuedCount * 0.002).toFixed(3)}`}
+                                        </span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <span>No images queued for processing</span>
+                            )
+                        }
+                        position="top"
+                        delay={300}
                     >
-                        {isProcessing ? (
-                            <>
-                                <div className="w-4 h-4 border-2 border-stone-300 border-t-stone-500 rounded-full animate-spin" />
-                                <span>Processing...</span>
-                            </>
-                        ) : apiMode === 'economy' ? (
-                            <>
-                                <Coins className="w-4 h-4" />
-                                <span>Queue Batch {queuedCount > 0 ? `(${queuedCount})` : ''}</span>
-                            </>
-                        ) : (
-                            <>
-                                <Wand2 className="w-4 h-4 text-clay-300" />
-                                <span>Run Batch {queuedCount > 0 ? `(${queuedCount})` : ''}</span>
-                            </>
-                        )}
-                    </button>
+                        <button
+                            onClick={apiMode === 'economy' ? onProcessBatch : onProcess}
+                            disabled={isProcessing || queuedCount === 0}
+                            className={`
+                        h-10 px-6 rounded-xl font-heading font-bold text-sm tracking-wide flex items-center justify-center gap-2.5 transition-all shadow-md whitespace-nowrap
+                        ${isProcessing
+                                    ? 'bg-stone-100 text-stone-400 cursor-not-allowed shadow-none border border-stone-200'
+                                    : apiMode === 'economy'
+                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-lg active:scale-95 border border-emerald-600'
+                                        : 'bg-stone-900 text-[#FDFCFB] hover:bg-stone-800 hover:shadow-lg active:scale-95 border border-stone-900'
+                                }
+                    `}
+                        >
+                            {isProcessing ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-stone-300 border-t-stone-500 rounded-full animate-spin" />
+                                    <span>Processing...</span>
+                                </>
+                            ) : apiMode === 'economy' ? (
+                                <>
+                                    <Coins className="w-4 h-4" />
+                                    <span>Queue Batch {queuedCount > 0 ? `(${queuedCount})` : ''}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Wand2 className="w-4 h-4 text-clay-300" />
+                                    <span>Run Batch {queuedCount > 0 ? `(${queuedCount})` : ''}</span>
+                                </>
+                            )}
+                        </button>
+                    </Tooltip>
                 </div>
 
             </div>

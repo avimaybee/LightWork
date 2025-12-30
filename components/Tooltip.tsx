@@ -74,14 +74,14 @@ export const Tooltip: React.FC<TooltipProps> = ({
             <AnimatePresence>
                 {isVisible && (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.15 }}
+                        initial={{ opacity: 0, scale: 0.92, y: position === 'bottom' ? -4 : 4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.92 }}
+                        transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
                         className={`absolute z-[500] ${positionClasses[position]}`}
                         style={{ maxWidth }}
                     >
-                        <div className="bg-stone-800 text-white text-xs rounded-lg px-3 py-2 shadow-xl leading-relaxed">
+                        <div className="bg-gradient-to-br from-stone-800 via-stone-850 to-stone-900 text-white text-xs rounded-xl px-4 py-2.5 shadow-2xl shadow-stone-900/40 leading-relaxed border border-white/[0.08] backdrop-blur-sm">
                             {content}
                         </div>
                         <div

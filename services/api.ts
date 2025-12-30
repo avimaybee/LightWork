@@ -121,7 +121,39 @@ export const api = {
         }
     },
 
-    // Processing & AI
+    deleteImage: async (imageId: string): Promise<boolean> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/images/${imageId}`, {
+                method: 'DELETE',
+                headers: authHeaders
+            });
+            return res.ok;
+        } catch (e) {
+            console.error('Failed to delete image', e);
+            return false;
+        }
+    },
+
+    // AI-powered semantic search
+    searchImages: async (images: Array<{ id: string, filename: string, thumbnailUrl: string }>, query: string): Promise<string[]> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/search`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify({ query, images })
+            });
+            const data = await res.json();
+            return data.matchingIds || [];
+        } catch (e) {
+            console.error('Search failed', e);
+            return images.map(img => img.id); // Return all on error
+        }
+    },
     processImage: async (jobId: string, model: string, systemPrompt: string, userPrompt: string, compressedImageData?: string): Promise<any> => {
         const authHeaders = await getAuthHeaders();
         const requestId = crypto.randomUUID();

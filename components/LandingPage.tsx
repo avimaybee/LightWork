@@ -31,7 +31,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode, setMode }) => {
   const title = mode === 'signin' ? 'Sign in' : 'Create account';
   const subtitle =
     mode === 'signin'
-      ? 'Pick up where your sessions left off.'
+      ? 'Pick up where your projects left off.'
       : 'Start a fresh workspace in under a minute.';
 
   const canSubmit = email.trim().length > 0 && password.length > 0 && !isLoading;
@@ -79,11 +79,10 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode, setMode }) => {
                 setMode('signin');
                 clearError();
               }}
-              className={`px-3 h-9 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider transition-all ${
-                mode === 'signin'
+              className={`px-3 h-9 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider transition-all ${mode === 'signin'
                   ? 'bg-white text-stone-900 shadow-sm ring-1 ring-black/5'
                   : 'text-stone-500 hover:text-stone-700'
-              }`}
+                }`}
               disabled={isLoading}
             >
               Sign in
@@ -94,11 +93,10 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode, setMode }) => {
                 setMode('signup');
                 clearError();
               }}
-              className={`px-3 h-9 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider transition-all ${
-                mode === 'signup'
+              className={`px-3 h-9 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider transition-all ${mode === 'signup'
                   ? 'bg-white text-stone-900 shadow-sm ring-1 ring-black/5'
                   : 'text-stone-500 hover:text-stone-700'
-              }`}
+                }`}
               disabled={isLoading}
             >
               Sign up
@@ -249,7 +247,7 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
     <div className="fixed inset-0 z-200 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-[#F2F0E9]/80 backdrop-blur-sm" onClick={onClose} />
-      
+
       {/* Paper grain */}
       <div
         className="pointer-events-none absolute inset-0 opacity-20"
@@ -260,7 +258,7 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
 
       <div className="relative w-full max-w-md animate-in fade-in zoom-in-95 duration-300">
         {onClose && (
-          <button 
+          <button
             onClick={onClose}
             className="absolute -top-12 right-0 text-stone-500 hover:text-stone-900 transition-colors p-2"
           >
@@ -268,7 +266,7 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
           </button>
         )}
         <AuthForm mode={mode} setMode={setMode} />
-        
+
         {/* Decorative blooms */}
         <div className="pointer-events-none absolute -z-10 -bottom-8 -right-8 w-32 h-32 bg-clay-200/30 rounded-full blur-3xl" />
         <div className="pointer-events-none absolute -z-10 -top-10 -left-8 w-28 h-28 bg-clay-300/20 rounded-full blur-2xl" />
@@ -340,7 +338,7 @@ export const LandingPage: React.FC = () => {
                 <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl">
                   <div className="rounded-2xl border border-stone-200/70 bg-[#FDFCFB]/80 backdrop-blur px-5 py-4 shadow-sm">
                     <div className="text-[10px] font-heading font-bold uppercase tracking-[0.24em] text-stone-400">01</div>
-                    <div className="mt-2 text-sm font-heading font-bold text-stone-900">Session memory</div>
+                    <div className="mt-2 text-sm font-heading font-bold text-stone-900">Project memory</div>
                     <div className="mt-1 text-xs text-stone-600 leading-relaxed">
                       Projects stay tidy, prompts stay attached.
                     </div>

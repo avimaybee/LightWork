@@ -1,3 +1,96 @@
+import { getAuthContext } from '../../lib/auth';
+
+async function moveR2KeyToTrash(storage: R2Bucket, key: string, now: number) {
+  if (!key) return;
+  const obj = await storage.get(key);
+  if (!obj) return;
+
+  const date = new Date(now).toISOString().slice(0, 10);
+  const trashKey = `trash/${date}/${now}-${key}`;
+
+  await storage.put(trashKey, obj.body, {
+    httpMetadata: obj.httpMetadata,
+    customMetadata: {
+      trashed_from: key,
+      trashed_at: String(now)
+    }
+  });
+
+  await storage.delete(key);
+}
+
+export async function onRequestDelete(context: any) {
+  try {
+    const auth = await getAuthContext(context.request);
+
+    if (!auth.userId) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // The key param here is actually the image ID
+    const imageId = context.params.key;
+    if (!imageId) {
+      return new Response(JSON.stringify({ error: 'Missing image ID' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Get image with job ownership verification
+    const image = await context.env.DB.prepare(`
+      SELECT i.id, i.r2_key_original, i.r2_key_result, j.user_id 
+      FROM images i
+      JOIN jobs j ON i.job_id = j.id
+      WHERE i.id = ?
+    `).bind(imageId).first();
+
+    if (!image) {
+      return new Response(JSON.stringify({ error: 'Image not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (image.user_id !== auth.userId) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const now = Date.now();
+
+    // Move R2 files to trash (for 30-day recovery)
+    const keysToTrash: string[] = [];
+    if (image.r2_key_original) keysToTrash.push(image.r2_key_original);
+    if (image.r2_key_result) keysToTrash.push(image.r2_key_result);
+
+    if (keysToTrash.length > 0) {
+      await Promise.allSettled(
+        keysToTrash.map((key) => moveR2KeyToTrash(context.env.STORAGE, key, now))
+      );
+    }
+
+    // Delete from batch_items first (foreign key dependency)
+    await context.env.DB.prepare("DELETE FROM batch_items WHERE image_id = ?").bind(imageId).run();
+
+    // Delete the image
+    await context.env.DB.prepare("DELETE FROM images WHERE id = ?").bind(imageId).run();
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (e: any) {
+    console.error('[Images API] Delete error:', e);
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
 
 export async function onRequestGet(context) {
   // Get the key from params - may be URL encoded

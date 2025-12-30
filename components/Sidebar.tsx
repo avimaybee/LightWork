@@ -99,12 +99,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const filtered = projects.filter(p =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    
+
     // When searching, show all matches; otherwise exclude pinned projects
     if (searchTerm) {
       return filtered;
     }
-    
+
     const pinnedIdSet = new Set(pinnedIds);
     return filtered.filter(p => !pinnedIdSet.has(p.id));
   }, [projects, searchTerm, pinnedIds]);
@@ -192,7 +192,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           onClick={handleCreateProject}
           disabled={isCreating}
-          title="New Session"
+          title="New Project"
           className={`
             flex items-center rounded-lg font-heading font-medium text-stone-900 bg-white border border-stone-200 shadow-sm hover:border-stone-300 hover:shadow-md transition-all group h-9 disabled:opacity-50 disabled:cursor-not-allowed
             ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}
@@ -205,7 +205,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Plus className="w-4 h-4 text-stone-500 group-hover:text-stone-900 transition-colors" />
             )}
           </div>
-          {!isCollapsed && <span>{isCreating ? 'Creating...' : 'New Session'}</span>}
+          {!isCollapsed && <span>{isCreating ? 'Creating...' : 'New Project'}</span>}
         </button>
 
         <button
@@ -293,7 +293,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {!isCollapsed && (
           <div className="px-3 py-2 mt-2">
             <p className="text-[10px] font-heading font-bold text-stone-500 uppercase tracking-wider">
-              {searchTerm ? 'Search Results' : 'All Sessions'}
+              {searchTerm ? 'Search Results' : 'All Projects'}
             </p>
           </div>
         )}
@@ -302,7 +302,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           !isCollapsed && (
             <div className="px-4 py-12 text-center flex flex-col items-center gap-3">
               <Archive className="w-8 h-8 text-stone-300" />
-              <span className="text-sm text-stone-500 italic">No sessions found</span>
+              <span className="text-sm text-stone-500 italic">No projects found</span>
             </div>
           )
         ) : (
@@ -383,7 +383,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               onDeleteProject(project.id);
                             }}
                             className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                            title="Delete Session"
+                            title="Delete Project"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>

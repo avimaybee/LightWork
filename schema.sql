@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS images (
     r2_key_original TEXT,
     r2_key_result TEXT,
     prompt TEXT,
+    description TEXT,              -- AI-generated description for search indexing
     error_msg TEXT,
     created_at INTEGER,
     FOREIGN KEY (job_id) REFERENCES jobs(id)

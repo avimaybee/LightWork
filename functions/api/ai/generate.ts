@@ -42,19 +42,25 @@ function jsonResponse(data: any, status: number = 200, extraHeaders?: Record<str
 export async function onRequestPost(context) {
     try {
         const rawBody = await context.request.json();
-        
+
         // Validate input with Zod schema
         const validation = generateRequestSchema.safeParse(rawBody);
         if (!validation.success) {
             const errors = validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
             return jsonResponse({ success: false, error: `Validation failed: ${errors}` }, 400);
         }
-        
+
         const { type, jobId, text, compressedImageData } = validation.data;
 
         console.log("[AI Generate] Request type:", type, "jobId:", jobId, "hasCompressedData:", !!compressedImageData);
 
-        const ai = new GoogleGenAI({ apiKey: context.env.GEMINI_API_KEY });
+        // Use free key if available, otherwise fallback to main key
+        const apiKey = context.env.FREE_GEMINI_API_KEY || context.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return jsonResponse({ success: false, error: "API key not configured" }, 500);
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
 
         // Use lighter models for analysis tasks (higher rate limits)
         const modelName = 'gemini-flash-latest';

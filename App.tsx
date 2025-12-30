@@ -1,18 +1,22 @@
-import React, { useState, useCallback, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useCallback, useEffect, useRef, Suspense, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { CommandDock } from './components/CommandDock';
 import { ImageCard } from './components/ImageCard';
 import { ToastContainer, ToastMsg } from './components/Toast';
+import { toast } from 'sonner';
 import { LandingPage, AuthModal } from './components/LandingPage';
 import { useConfirmDialog } from './components/ConfirmDialog';
 import { EmptyState } from './components/EmptyState';
 import { AuthProvider, useAuth } from './services/authContext';
 import { Project, ImageJob, ProcessingStatus, DEFAULT_MODULES, Module, AppModel, ApiMode } from './types';
 
-import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock, Loader2, FileText, LayoutGrid, Columns } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock, Loader2, FileText, LayoutGrid, Columns, Search, X, Sparkles } from 'lucide-react';
 import { processImageWithGemini, generateSmartFilename } from './services/geminiService';
 import { generateThumbnail, wait, calculateBackoff } from './utils';
 import { api } from './services/api';
+import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const LazyInspector = React.lazy(() => import('./components/Inspector').then(m => ({ default: m.Inspector })));
 const LazyLightbox = React.lazy(() => import('./components/Lightbox').then(m => ({ default: m.Lightbox })));
@@ -30,6 +34,39 @@ const PARALLEL_BATCH_SIZE = 10; // Send up to 10 images per parallel API call
 
 type AppView = 'workspace' | 'modules';
 type FilterType = 'all' | 'ready' | 'done' | 'failed';
+
+// Sortable wrapper for ImageCard (drag-to-reorder)
+interface SortableImageCardProps {
+    job: ImageJob;
+    isSelected: boolean;
+    isActive: boolean;
+    onToggleSelect: (id: string, shiftKey: boolean) => void;
+    onClick: (id: string, e: React.MouseEvent) => void;
+    isSearchMatch: boolean;
+}
+
+const SortableImageCard: React.FC<SortableImageCardProps> = ({ job, isSelected, isActive, onToggleSelect, onClick, isSearchMatch }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: job.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 100 : undefined,
+        opacity: isDragging ? 0.8 : isSearchMatch ? 1 : 0.3,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+            <ImageCard
+                job={job}
+                isSelected={isSelected}
+                isActive={isActive}
+                onToggleSelect={onToggleSelect}
+                onClick={onClick}
+            />
+        </div>
+    );
+};
 
 // Main App Content (protected by auth)
 function AppContent() {
@@ -56,6 +93,11 @@ function AppContent() {
     const [filter, setFilter] = useState<FilterType>('all');
     const [apiMode, setApiMode] = useState<ApiMode>('fast');
 
+    // AI Search State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<string[] | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
+
     // Interactions #7: Infinite Scroll (client-side pagination)
     const [visibleCount, setVisibleCount] = useState(36);
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -75,10 +117,10 @@ function AppContent() {
     const didAutoNameProjectRef = useRef<Record<string, true>>({});
     const gridContainerRef = useRef<HTMLDivElement>(null);
     const newImageIdsRef = useRef<string[]>([]);
-    
+
     // Refs for handlers used in keyboard shortcuts (to avoid temporal dead zone)
-    const handleProcessBatchRef = useRef<() => void>(() => {});
-    const processQueueRef = useRef<() => void>(() => {});
+    const handleProcessBatchRef = useRef<() => void>(() => { });
+    const processQueueRef = useRef<() => void>(() => { });
 
     useEffect(() => {
         projectsRef.current = projects;
@@ -174,6 +216,33 @@ function AppContent() {
     // Reset infinite-scroll window when project/filter changes
     useEffect(() => {
         setVisibleCount(36);
+    }, [currentProjectId, filter]);
+
+    // Filter Persistence: Load saved filter when switching projects
+    useEffect(() => {
+        if (currentProjectId && currentProjectId !== 'temp') {
+            try {
+                const savedFilter = localStorage.getItem(`lightwork_filter_${currentProjectId}`);
+                if (savedFilter && ['all', 'ready', 'done', 'failed'].includes(savedFilter)) {
+                    setFilter(savedFilter as FilterType);
+                } else {
+                    setFilter('all'); // Default for new projects
+                }
+            } catch {
+                setFilter('all');
+            }
+        }
+    }, [currentProjectId]);
+
+    // Filter Persistence: Save filter when it changes
+    useEffect(() => {
+        if (currentProjectId && currentProjectId !== 'temp' && filter) {
+            try {
+                localStorage.setItem(`lightwork_filter_${currentProjectId}`, filter);
+            } catch {
+                // ignore storage failures
+            }
+        }
     }, [currentProjectId, filter]);
 
     // QoL #1: Auto-save Module Prompt (local only)
@@ -285,31 +354,86 @@ function AppContent() {
                 return;
             }
 
-            // Delete/Backspace: Remove selected images
+            // Delete/Backspace: Remove selected images with undo
             if ((key === 'delete' || key === 'backspace') && !isTypingTarget && selectedJobs.length > 0) {
                 e.preventDefault();
-                confirm({
-                    title: selectedJobs.length === 1 ? 'Delete Image' : `Delete ${selectedJobs.length} Images`,
-                    message: 'Are you sure you want to delete the selected images? This action cannot be undone.',
-                    confirmLabel: 'Delete',
-                    variant: 'danger',
-                }).then((confirmed) => {
-                    if (confirmed) {
-                        const ids = selectedJobs.map(j => j.id);
-                        setProjects(prev => prev.map(p =>
-                            p.id === currentProjectId
-                                ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) }
-                                : p
-                        ));
-                        clearSelection();
-                    }
+                const jobsToDelete = [...selectedJobs];
+                const ids = jobsToDelete.map(j => j.id);
+                const count = ids.length;
+
+                // Immediately remove from UI (optimistic)
+                setProjects(prev => prev.map(p =>
+                    p.id === currentProjectId
+                        ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) }
+                        : p
+                ));
+                clearSelection();
+
+                // Show undo toast with delayed backend deletion
+                let undone = false;
+                const toastId = toast(`${count} image${count > 1 ? 's' : ''} deleted`, {
+                    duration: 10000,
+                    action: {
+                        label: 'Undo',
+                        onClick: () => {
+                            undone = true;
+                            // Restore deleted jobs to UI
+                            setProjects(prev => prev.map(p =>
+                                p.id === currentProjectId
+                                    ? { ...p, jobs: [...p.jobs, ...jobsToDelete] }
+                                    : p
+                            ));
+                            toast.success('Restored!', { duration: 2000 });
+                        },
+                    },
                 });
+
+                // Delay actual backend deletion to allow undo
+                setTimeout(async () => {
+                    if (!undone) {
+                        await Promise.allSettled(ids.map(id => api.deleteImage(id)));
+                    }
+                }, 10000);
+
                 return;
             }
 
             // Only process workspace-specific shortcuts in workspace view
             if (currentView !== 'workspace') return;
             if (isTypingTarget) return;
+
+            // Arrow key navigation for image grid
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+                e.preventDefault();
+                const jobs = currentProject?.jobs || [];
+                if (jobs.length === 0) return;
+
+                const currentIndex = lastSelectedId.current
+                    ? jobs.findIndex(j => j.id === lastSelectedId.current)
+                    : -1;
+
+                let newIndex = currentIndex;
+                switch (key) {
+                    case 'arrowleft':
+                        newIndex = currentIndex <= 0 ? jobs.length - 1 : currentIndex - 1;
+                        break;
+                    case 'arrowright':
+                        newIndex = currentIndex >= jobs.length - 1 ? 0 : currentIndex + 1;
+                        break;
+                    case 'arrowup':
+                        newIndex = Math.max(0, currentIndex - gridColumns);
+                        break;
+                    case 'arrowdown':
+                        newIndex = Math.min(jobs.length - 1, currentIndex + gridColumns);
+                        break;
+                }
+
+                const newJob = jobs[newIndex];
+                if (newJob) {
+                    handleJobClick(newJob.id, false, false);
+                }
+                return;
+            }
 
             // Ctrl/Cmd + A: Select all visible
             if (isMod && key === 'a') {
@@ -416,9 +540,9 @@ function AppContent() {
     const deleteProject = async (id: string) => {
         if (projects.length <= 1) return;
         const confirmed = await confirm({
-            title: 'Delete Session',
-            message: 'Are you sure you want to delete this session? All images will be permanently removed. This action cannot be undone.',
-            confirmLabel: 'Delete Session',
+            title: 'Delete Project',
+            message: 'Are you sure you want to delete this project? All images will be permanently removed. This action cannot be undone.',
+            confirmLabel: 'Delete Project',
             variant: 'danger',
         });
         if (!confirmed) return;
@@ -510,7 +634,7 @@ function AppContent() {
         newImageIdsRef.current = newImageIds;
 
         setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: [...p.jobs, ...newJobs] } : p));
-        
+
         // Smooth scroll to first new image after DOM update
         requestAnimationFrame(() => {
             setTimeout(() => {
@@ -539,22 +663,43 @@ function AppContent() {
     // Bulk Action Handlers
     const handleBulkDelete = () => {
         if (selectedJobs.length === 0) return;
-        confirm({
-            title: selectedJobs.length === 1 ? 'Delete Image' : `Delete ${selectedJobs.length} Images`,
-            message: 'Are you sure you want to delete the selected images? This action cannot be undone.',
-            confirmLabel: 'Delete',
-            variant: 'danger',
-        }).then((confirmed) => {
-            if (confirmed) {
-                const ids = selectedJobs.map(j => j.id);
-                setProjects(prev => prev.map(p =>
-                    p.id === currentProjectId
-                        ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) }
-                        : p
-                ));
-                clearSelection();
-            }
+        const jobsToDelete = [...selectedJobs];
+        const ids = jobsToDelete.map(j => j.id);
+        const count = ids.length;
+
+        // Immediately remove from UI (optimistic)
+        setProjects(prev => prev.map(p =>
+            p.id === currentProjectId
+                ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) }
+                : p
+        ));
+        clearSelection();
+
+        // Show undo toast with delayed backend deletion
+        let undone = false;
+        toast(`${count} image${count > 1 ? 's' : ''} deleted`, {
+            duration: 10000,
+            action: {
+                label: 'Undo',
+                onClick: () => {
+                    undone = true;
+                    // Restore deleted jobs to UI
+                    setProjects(prev => prev.map(p =>
+                        p.id === currentProjectId
+                            ? { ...p, jobs: [...p.jobs, ...jobsToDelete] }
+                            : p
+                    ));
+                    toast.success('Restored!', { duration: 2000 });
+                },
+            },
         });
+
+        // Delay actual backend deletion to allow undo
+        setTimeout(async () => {
+            if (!undone) {
+                await Promise.allSettled(ids.map(id => api.deleteImage(id)));
+            }
+        }, 10000);
     };
 
     const handleBulkDownload = async () => {
@@ -656,8 +801,12 @@ function AppContent() {
             variant: 'danger',
         });
         if (confirmed) {
+            const currentJobs = projectsRef.current.find(p => p.id === currentProjectId)?.jobs || [];
+            const ids = currentJobs.map(j => j.id);
+            // Optimistic UI update
             setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: [] } : p));
-            // Should call API to delete jobs
+            // Persist deletions to backend
+            await Promise.allSettled(ids.map(id => api.deleteImage(id)));
         }
     };
 
@@ -675,6 +824,72 @@ function AppContent() {
                 : p
         ));
     };
+
+    // AI-Powered Search Handler
+    const handleSearch = useCallback(async () => {
+        if (!searchQuery.trim()) {
+            setSearchResults(null);
+            return;
+        }
+
+        const jobs = currentProject?.jobs || [];
+        if (jobs.length === 0) {
+            setSearchResults([]);
+            return;
+        }
+
+        setIsSearching(true);
+        try {
+            const imageData = jobs.map(j => ({
+                id: j.id,
+                filename: j.fileName || 'untitled',
+                thumbnailUrl: j.thumbnailUrl || ''
+            }));
+
+            const matchingIds = await api.searchImages(imageData, searchQuery);
+            setSearchResults(matchingIds);
+            toast.success(`Found ${matchingIds.length} matching images`);
+        } catch (error) {
+            console.error('Search failed:', error);
+            toast.error('Search failed');
+            setSearchResults(null);
+        } finally {
+            setIsSearching(false);
+        }
+    }, [searchQuery, currentProject]);
+
+    // Clear search
+    const clearSearch = useCallback(() => {
+        setSearchQuery('');
+        setSearchResults(null);
+    }, []);
+
+    // Drag-to-Reorder: DnD Sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    );
+
+    // Drag-to-Reorder: Handle drag end
+    const handleDragEnd = useCallback((event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (!over || active.id === over.id) return;
+
+        setProjects(prev => prev.map(p => {
+            if (p.id !== currentProjectId) return p;
+
+            const jobs = [...p.jobs];
+            const oldIndex = jobs.findIndex(j => j.id === active.id);
+            const newIndex = jobs.findIndex(j => j.id === over.id);
+
+            if (oldIndex === -1 || newIndex === -1) return p;
+
+            const reorderedJobs = arrayMove(jobs, oldIndex, newIndex);
+            return { ...p, jobs: reorderedJobs };
+        }));
+
+        toast.success('Images reordered');
+    }, [currentProjectId]);
 
     // QoL #19: Retry a single failed upload (keeps it per-item)
     const retryUpload = useCallback((jobId: string) => {
@@ -733,10 +948,10 @@ function AppContent() {
         if (!freshProject) return;
 
         // Get all queued jobs
-        const queuedJobs = freshProject.jobs.filter(j => 
+        const queuedJobs = freshProject.jobs.filter(j =>
             j.status === 'queued' || j.status === 'retrying'
         );
-        
+
         if (queuedJobs.length === 0) {
             addToast('info', 'No images to process');
             return;
@@ -772,24 +987,24 @@ function AppContent() {
                     if (result.retryAfterMs) {
                         // Check if we've exceeded max retries for this batch
                         const currentRetries = batchRetries.get(batchIndex) || 0;
-                        
+
                         if (currentRetries < MAX_BATCH_RETRIES) {
                             // Rate limited - wait and retry this batch
                             const waitSec = Math.ceil(result.retryAfterMs / 1000);
                             addToast('warning', `Rate limited. Waiting ${waitSec}s... (retry ${currentRetries + 1}/${MAX_BATCH_RETRIES})`);
-                            
+
                             for (const job of batch) {
-                                updateJob(job.id, { 
-                                    status: 'retrying', 
-                                    errorMsg: `Rate limited. Waiting ${waitSec}s...` 
+                                updateJob(job.id, {
+                                    status: 'retrying',
+                                    errorMsg: `Rate limited. Waiting ${waitSec}s...`
                                 });
                             }
-                            
+
                             await wait(result.retryAfterMs);
-                            
+
                             // Record retry attempt
                             batchRetries.set(batchIndex, currentRetries + 1);
-                            
+
                             // Reset status and retry (don't advance batchIndex)
                             for (const job of batch) {
                                 updateJob(job.id, { status: 'processing' });
@@ -815,9 +1030,9 @@ function AppContent() {
                             // Fetch the result image URL - for now we'll refresh from backend
                             updateJob(processed.jobId, { status: 'completed' });
                         } else {
-                            updateJob(processed.jobId, { 
-                                status: 'error', 
-                                errorMsg: processed.error || 'Processing failed' 
+                            updateJob(processed.jobId, {
+                                status: 'error',
+                                errorMsg: processed.error || 'Processing failed'
                             });
                         }
                     }
@@ -841,12 +1056,12 @@ function AppContent() {
             // Refresh project data to get result URLs
             const updatedProjects = await api.getProjects();
             setProjects(updatedProjects);
-            
+
             addToast('success', 'Batch complete!');
         } catch (err) {
             console.error('Parallel processing error:', err);
             addToast('error', 'Processing failed');
-            
+
             // Mark remaining as queued for retry
             for (const job of queuedJobs) {
                 const current = projectsRef.current
@@ -1059,6 +1274,45 @@ function AppContent() {
                                         )
                                     })}
                                 </div>
+
+                                {/* AI Search Bar */}
+                                <div className="hidden md:flex items-center gap-1 relative">
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                            placeholder="AI Search..."
+                                            className="w-48 pl-8 pr-8 py-1.5 text-xs bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-clay-500/20 focus:border-clay-400 transition-all"
+                                        />
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
+                                        {searchQuery && (
+                                            <button
+                                                onClick={clearSearch}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={handleSearch}
+                                        disabled={isSearching || !searchQuery.trim()}
+                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold bg-gradient-to-r from-clay-500 to-clay-600 text-white rounded-lg shadow-sm hover:shadow-md disabled:opacity-50 transition-all"
+                                    >
+                                        {isSearching ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                            <Sparkles className="w-3.5 h-3.5" />
+                                        )}
+                                    </button>
+                                    {searchResults && (
+                                        <span className="text-[10px] text-stone-500 font-bold">
+                                            {searchResults.length} match{searchResults.length !== 1 ? 'es' : ''}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="flex items-center gap-3">
@@ -1088,7 +1342,7 @@ function AppContent() {
                                 {currentProject.jobs && currentProject.jobs.length > 0 && <button onClick={clearAllJobs} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Clear All"><Trash2 className="w-4 h-4" /></button>}
                                 {currentProject.jobs && currentProject.jobs.some(j => j.status === 'error' || j.status === 'paused') && <button onClick={retryFailed} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-stone-600 bg-white hover:bg-stone-50 rounded-lg border border-stone-200 shadow-sm"><RefreshCw className="w-3.5 h-3.5" /><span>Retry</span></button>}
 
-                                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-stone-200 shadow-sm" title="Grid Zoom">
+                                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-stone-200 shadow-sm" title="Grid Density">
                                     <Grip className="w-3.5 h-3.5 text-stone-400" />
                                     <input
                                         type="range"
@@ -1097,19 +1351,19 @@ function AppContent() {
                                         step={1}
                                         value={gridColumns}
                                         onChange={(e) => setGridColumns(parseInt(e.target.value, 10))}
-                                        className="w-24 accent-stone-900"
-                                        aria-label="Grid zoom"
+                                        className="w-20 accent-stone-900"
+                                        aria-label="Grid density"
                                     />
+                                    <span className="text-xs font-bold text-stone-500 tabular-nums w-6">{gridColumns}col</span>
                                 </div>
 
                                 {/* Masonry Toggle */}
                                 <button
                                     onClick={() => setIsMasonryView(!isMasonryView)}
-                                    className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm transition-colors ${
-                                        isMasonryView 
-                                            ? 'bg-stone-900 border-stone-900 text-white' 
-                                            : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50'
-                                    }`}
+                                    className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm transition-colors ${isMasonryView
+                                        ? 'bg-stone-900 border-stone-900 text-white'
+                                        : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50'
+                                        }`}
                                     title={isMasonryView ? 'Switch to Grid View' : 'Switch to Masonry View'}
                                 >
                                     {isMasonryView ? <Columns className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
@@ -1123,48 +1377,62 @@ function AppContent() {
                             {(currentProject.jobs || []).length === 0 ? (
                                 <EmptyState type="workspace" />
                             ) : isMasonryView ? (
-                                /* Masonry Layout */
-                                <div 
-                                    className="masonry-grid pb-24" 
-                                    style={{ '--masonry-columns': gridColumns } as React.CSSProperties}
-                                >
-                                    {renderedJobs.map(job => (
-                                        <div key={job.id} data-image-id={job.id}>
-                                            <ImageCard
-                                                job={job}
-                                                isSelected={!!job.selected}
-                                                isActive={!!job.selected}
-                                                onToggleSelect={toggleSelection}
-                                                onClick={(id, e) => handleJobClick(id, e.shiftKey, e.metaKey || e.ctrlKey)}
-                                            />
-                                        </div>
-                                    ))}
+                                /* Masonry Layout with Drag-to-Reorder */
+                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                                    <SortableContext items={renderedJobs.map(j => j.id)} strategy={rectSortingStrategy}>
+                                        <div
+                                            className="masonry-grid pb-24"
+                                            style={{ '--masonry-columns': gridColumns } as React.CSSProperties}
+                                        >
+                                            {renderedJobs.map(job => {
+                                                const isSearchMatch = !searchResults || searchResults.includes(job.id);
+                                                return (
+                                                    <SortableImageCard
+                                                        key={job.id}
+                                                        job={job}
+                                                        isSelected={!!job.selected}
+                                                        isActive={!!job.selected}
+                                                        onToggleSelect={toggleSelection}
+                                                        onClick={(id, e) => handleJobClick(id, e.shiftKey, e.metaKey || e.ctrlKey)}
+                                                        isSearchMatch={isSearchMatch}
+                                                    />
+                                                );
+                                            })}
 
-                                    {/* Infinite scroll sentinel */}
-                                    {renderedJobs.length < filteredJobs.length && (
-                                        <div ref={loadMoreRef} className="h-8" />
-                                    )}
-                                </div>
+                                            {/* Infinite scroll sentinel */}
+                                            {renderedJobs.length < filteredJobs.length && (
+                                                <div ref={loadMoreRef} className="h-8" />
+                                            )}
+                                        </div>
+                                    </SortableContext>
+                                </DndContext>
                             ) : (
-                                /* Standard Grid Layout */
-                                <div className="grid gap-8 pb-24" style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}>
-                                    {renderedJobs.map(job => (
-                                        <div key={job.id} data-image-id={job.id}>
-                                            <ImageCard
-                                                job={job}
-                                                isSelected={!!job.selected}
-                                                isActive={!!job.selected}
-                                                onToggleSelect={toggleSelection}
-                                                onClick={(id, e) => handleJobClick(id, e.shiftKey, e.metaKey || e.ctrlKey)}
-                                            />
-                                        </div>
-                                    ))}
+                                /* Standard Grid Layout with Drag-to-Reorder */
+                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                                    <SortableContext items={renderedJobs.map(j => j.id)} strategy={rectSortingStrategy}>
+                                        <div className="grid gap-8 pb-24" style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}>
+                                            {renderedJobs.map(job => {
+                                                const isSearchMatch = !searchResults || searchResults.includes(job.id);
+                                                return (
+                                                    <SortableImageCard
+                                                        key={job.id}
+                                                        job={job}
+                                                        isSelected={!!job.selected}
+                                                        isActive={!!job.selected}
+                                                        onToggleSelect={toggleSelection}
+                                                        onClick={(id, e) => handleJobClick(id, e.shiftKey, e.metaKey || e.ctrlKey)}
+                                                        isSearchMatch={isSearchMatch}
+                                                    />
+                                                );
+                                            })}
 
-                                    {/* Infinite scroll sentinel */}
-                                    {renderedJobs.length < filteredJobs.length && (
-                                        <div ref={loadMoreRef} className="h-8 col-span-full" />
-                                    )}
-                                </div>
+                                            {/* Infinite scroll sentinel */}
+                                            {renderedJobs.length < filteredJobs.length && (
+                                                <div ref={loadMoreRef} className="h-8 col-span-full" />
+                                            )}
+                                        </div>
+                                    </SortableContext>
+                                </DndContext>
                             )}
                         </div>
 
@@ -1210,20 +1478,9 @@ function AppContent() {
                             />
                         </Suspense>
                     )}
-                    
-                    {/* Bulk Action Toolbar */}
-                    <Suspense fallback={null}>
-                        <LazyBulkActionToolbar
-                            selectedJobs={selectedJobs}
-                            onDelete={handleBulkDelete}
-                            onDownload={handleBulkDownload}
-                            onProcess={handleBulkProcess}
-                            onClearSelection={clearSelection}
-                            onResetStatus={handleBulkResetStatus}
-                            isProcessing={isProcessing}
-                        />
-                    </Suspense>
-                    
+
+
+
                     {/* Back to Top Button */}
                     <Suspense fallback={null}>
                         <LazyBackToTop />
