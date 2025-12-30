@@ -1,5 +1,5 @@
-import { verifyAuth } from '../../lib/auth'; // Adjust import path if needed
-import { corsHeaders } from '../../lib/utils'; // Adjust import path if needed
+import { verifyAuth } from '../lib/auth'; // Adjusted import path
+import { corsHeaders } from '../lib/utils'; // Adjusted import path
 
 export const onRequest = async (context) => {
     const { request, env } = context;

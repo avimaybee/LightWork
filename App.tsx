@@ -1187,7 +1187,6 @@ function AppContent() {
                 onSelectProject={(id) => { setCurrentProjectId(id); setCurrentView('workspace'); clearSelection(); }}
                 onCreateProject={async () => { const newP = await api.createProject(`Session #${projects.length + 1}`); if (newP) { setProjects([newP, ...projects]); setCurrentProjectId(newP.id); setCurrentView('workspace'); } }}
                 onRenameProject={(id, name) => { setProjects(prev => prev.map(p => p.id === id ? { ...p, name } : p)); api.updateProject(id, { name }); }}
-                onRenameProject={(id, name) => { setProjects(prev => prev.map(p => p.id === id ? { ...p, name } : p)); api.updateProject(id, { name }); }}
                 onDeleteProject={deleteProject} currentView={currentView} onChangeView={setCurrentView} onDuplicateProject={handleDuplicateProject}
             />
 

@@ -384,7 +384,8 @@ export const api = {
             return null;
         }
     }
-},
+    ,
+
     // Favorites
     getFavorites: async (): Promise<string[]> => {
         try {
@@ -400,36 +401,36 @@ export const api = {
         }
     },
 
-        addFavorite: async (moduleId: string): Promise<boolean> => {
-            try {
-                const authHeaders = await getAuthHeaders();
-                const res = await fetch(`${API_BASE}/favorites`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...authHeaders
-                    },
-                    body: JSON.stringify({ moduleId })
-                });
-                return res.ok;
-            } catch (e) {
-                console.error("Failed to add favorite", e);
-                return false;
-            }
-        },
+    addFavorite: async (moduleId: string): Promise<boolean> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/favorites`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify({ moduleId })
+            });
+            return res.ok;
+        } catch (e) {
+            console.error("Failed to add favorite", e);
+            return false;
+        }
+    },
 
-            removeFavorite: async (moduleId: string): Promise<boolean> => {
-                try {
-                    const authHeaders = await getAuthHeaders();
-                    const res = await fetch(`${API_BASE}/favorites?moduleId=${moduleId}`, {
-                        method: 'DELETE',
-                        headers: authHeaders
-                    });
-                    return res.ok;
-                } catch (e) {
-                    console.error("Failed to remove favorite", e);
-                    return false;
-                }
-            }
+    removeFavorite: async (moduleId: string): Promise<boolean> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/favorites?moduleId=${moduleId}`, {
+                method: 'DELETE',
+                headers: authHeaders
+            });
+            return res.ok;
+        } catch (e) {
+            console.error("Failed to remove favorite", e);
+            return false;
+        }
+    }
 };
 

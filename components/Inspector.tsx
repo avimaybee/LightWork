@@ -536,117 +536,118 @@ export const Inspector: React.FC<InspectorProps> = ({
                             </div>
                         ))}
                         {selectedJobs.length > 11 && (
-                            +{ selectedJobs.length - 11 }
-                        </div>
-                    )}
-                </div>
-
-                {/* Batch Prompt */}
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Edit3 className="w-4 h-4 text-stone-400" />
-                            <label className="text-xs font-bold text-stone-400 uppercase tracking-widest">Batch Adjustment</label>
-                        </div>
-                        <button onClick={applyBatchPrompt} disabled={!batchPrompt} className="text-xs font-bold text-clay-600 hover:text-clay-700 disabled:opacity-50">
-                            Apply to All
-                        </button>
+                            <div className="aspect-square bg-stone-100 rounded border border-stone-200 flex items-center justify-center text-xs font-bold text-stone-500">
+                                +{selectedJobs.length - 11}
+                            </div>
+                        )}
                     </div>
-                    <textarea
-                        value={batchPrompt}
-                        onChange={(e) => setBatchPrompt(e.target.value)}
-                        placeholder="Write instruction for all selected items..."
-                        className="w-full h-24 bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 resize-none font-medium font-sans"
-                    />
-                </div>
 
-                <hr className="border-stone-100" />
+                    {/* Batch Prompt */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Edit3 className="w-4 h-4 text-stone-400" />
+                                <label className="text-xs font-bold text-stone-400 uppercase tracking-widest">Batch Adjustment</label>
+                            </div>
+                            <button onClick={applyBatchPrompt} disabled={!batchPrompt} className="text-xs font-bold text-clay-600 hover:text-clay-700 disabled:opacity-50">
+                                Apply to All
+                            </button>
+                        </div>
+                        <textarea
+                            value={batchPrompt}
+                            onChange={(e) => setBatchPrompt(e.target.value)}
+                            placeholder="Write instruction for all selected items..."
+                            className="w-full h-24 bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 resize-none font-medium font-sans"
+                        />
+                    </div>
 
-                {/* Batch Actions */}
-                <div className="space-y-4">
-                    <label className="text-xs font-bold text-stone-400 uppercase tracking-widest flex items-center gap-2">
-                        <CheckSquare className="w-4 h-4 text-stone-300" />
-                        Bulk Actions
-                    </label>
+                    <hr className="border-stone-100" />
 
-                    {aiFailedIds.length > 0 && (
-                        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                            <div className="flex items-start gap-3">
-                                <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
-                                <div className="min-w-0">
-                                    <div className="text-xs font-bold text-red-700 uppercase tracking-widest">{aiFailedIds.length} Failed</div>
-                                    <div className="text-xs text-red-700/90 font-medium leading-relaxed mt-1">Some selected items failed AI generation. You can retry just the failed ones.</div>
+                    {/* Batch Actions */}
+                    <div className="space-y-4">
+                        <label className="text-xs font-bold text-stone-400 uppercase tracking-widest flex items-center gap-2">
+                            <CheckSquare className="w-4 h-4 text-stone-300" />
+                            Bulk Actions
+                        </label>
+
+                        {aiFailedIds.length > 0 && (
+                            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                                <div className="flex items-start gap-3">
+                                    <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-bold text-red-700 uppercase tracking-widest">{aiFailedIds.length} Failed</div>
+                                        <div className="text-xs text-red-700/90 font-medium leading-relaxed mt-1">Some selected items failed AI generation. You can retry just the failed ones.</div>
+                                    </div>
+                                </div>
+                                <div className="pt-3">
+                                    <button
+                                        onClick={() => onRetry(aiFailedIds)}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-700 rounded-lg text-xs font-bold hover:bg-red-50 border border-red-200 hover:border-red-300 transition-colors"
+                                    >
+                                        <RefreshCcw className="w-3.5 h-3.5" /> Retry Failed
+                                    </button>
                                 </div>
                             </div>
-                            <div className="pt-3">
-                                <button
-                                    onClick={() => onRetry(aiFailedIds)}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-700 rounded-lg text-xs font-bold hover:bg-red-50 border border-red-200 hover:border-red-300 transition-colors"
-                                >
-                                    <RefreshCcw className="w-3.5 h-3.5" /> Retry Failed
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    <button onClick={handleBatchRename} disabled={isRenaming} className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 text-stone-700 rounded-xl text-xs font-bold hover:border-clay-300 hover:bg-clay-50/10 transition-all text-left disabled:opacity-50 shadow-sm group">
-                        {isRenaming ? <RefreshCcw className="w-5 h-5 animate-spin text-clay-500" /> : <Wand2 className="w-5 h-5 text-clay-500" />}
-                        <div className="flex flex-col">
-                            <span className="text-stone-900 font-heading">Smart Rename All</span>
-                            <span className="text-[10px] text-stone-400 font-normal">Generate consistent filenames</span>
-                        </div>
-                    </button>
-
-                    <button onClick={handleBatchDownload} disabled={isDownloadingZip} className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 text-stone-700 rounded-xl text-xs font-bold hover:border-stone-300 hover:bg-stone-50 transition-all text-left shadow-sm disabled:opacity-50">
-                        {isDownloadingZip ? (
-                            <RefreshCcw className="w-5 h-5 text-stone-400 animate-spin" />
-                        ) : (
-                            <DownloadCloud className="w-5 h-5 text-stone-400" />
                         )}
-                        <div className="flex flex-col">
-                            <span className="text-stone-900 font-heading">{isDownloadingZip ? 'Preparing...' : 'Download All'}</span>
-                            <span className="text-[10px] text-stone-400 font-normal">Save processed images as ZIP</span>
-                        </div>
-                    </button>
 
-                    {typeof zipProgress === 'number' && (
-                        <div className="px-4">
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Preparing ZIP</span>
-                                <span className="text-[10px] font-bold text-stone-600 tabular-nums">{zipProgress}%</span>
+                        <button onClick={handleBatchRename} disabled={isRenaming} className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 text-stone-700 rounded-xl text-xs font-bold hover:border-clay-300 hover:bg-clay-50/10 transition-all text-left disabled:opacity-50 shadow-sm group">
+                            {isRenaming ? <RefreshCcw className="w-5 h-5 animate-spin text-clay-500" /> : <Wand2 className="w-5 h-5 text-clay-500" />}
+                            <div className="flex flex-col">
+                                <span className="text-stone-900 font-heading">Smart Rename All</span>
+                                <span className="text-[10px] text-stone-400 font-normal">Generate consistent filenames</span>
                             </div>
-                            <div className="h-1.5 rounded-full bg-stone-200 overflow-hidden">
-                                <div className="h-full bg-clay-500 transition-[width] duration-150" style={{ width: `${Math.max(0, Math.min(100, zipProgress))}%` }} />
-                            </div>
-                        </div>
-                    )}
+                        </button>
 
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                        <button onClick={() => onRetry(selectedJobs.map(j => j.id))} className="flex items-center justify-center gap-2 px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors border border-transparent hover:border-stone-200">
-                            <RefreshCcw className="w-3.5 h-3.5" /> Re-run
+                        <button onClick={handleBatchDownload} disabled={isDownloadingZip} className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 text-stone-700 rounded-xl text-xs font-bold hover:border-stone-300 hover:bg-stone-50 transition-all text-left shadow-sm disabled:opacity-50">
+                            {isDownloadingZip ? (
+                                <RefreshCcw className="w-5 h-5 text-stone-400 animate-spin" />
+                            ) : (
+                                <DownloadCloud className="w-5 h-5 text-stone-400" />
+                            )}
+                            <div className="flex flex-col">
+                                <span className="text-stone-900 font-heading">{isDownloadingZip ? 'Preparing...' : 'Download All'}</span>
+                                <span className="text-[10px] text-stone-400 font-normal">Save processed images as ZIP</span>
+                            </div>
                         </button>
-                        <button
-                            onClick={async () => {
-                                const confirmed = await confirm({
-                                    title: `Delete ${selectedJobs.length} Images`,
-                                    message: `Are you sure you want to delete ${selectedJobs.length} selected images? This action cannot be undone.`,
-                                    confirmLabel: 'Delete All',
-                                    variant: 'danger',
-                                });
-                                if (confirmed) {
-                                    onRemove(selectedJobs.map(j => j.id));
-                                    onClose();
-                                }
-                            }}
-                            className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 border border-stone-200 hover:border-red-100 transition-colors"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" /> Delete
-                        </button>
+
+                        {typeof zipProgress === 'number' && (
+                            <div className="px-4">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Preparing ZIP</span>
+                                    <span className="text-[10px] font-bold text-stone-600 tabular-nums">{zipProgress}%</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-stone-200 overflow-hidden">
+                                    <div className="h-full bg-clay-500 transition-[width] duration-150" style={{ width: `${Math.max(0, Math.min(100, zipProgress))}%` }} />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3 pt-2">
+                            <button onClick={() => onRetry(selectedJobs.map(j => j.id))} className="flex items-center justify-center gap-2 px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors border border-transparent hover:border-stone-200">
+                                <RefreshCcw className="w-3.5 h-3.5" /> Re-run
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    const confirmed = await confirm({
+                                        title: `Delete ${selectedJobs.length} Images`,
+                                        message: `Are you sure you want to delete ${selectedJobs.length} selected images? This action cannot be undone.`,
+                                        confirmLabel: 'Delete All',
+                                        variant: 'danger',
+                                    });
+                                    if (confirmed) {
+                                        onRemove(selectedJobs.map(j => j.id));
+                                        onClose();
+                                    }
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-red-50 border border-stone-200 hover:border-red-100 transition-colors"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <ConfirmDialog />
-        </div >
+                <ConfirmDialog />
+            </div >
         </>
     );
 };
