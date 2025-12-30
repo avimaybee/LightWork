@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Project, Module, ApiMode } from '../types';
 import { Zap, Wand2, Layers, Cpu, Maximize2, Minimize2, Save, Settings, Grid, Terminal, ChevronDown, ChevronUp, Coins, Star } from 'lucide-react';
-import { Zap, Wand2, Layers, Cpu, Maximize2, Minimize2, Save, Settings, Grid, Terminal, ChevronDown, ChevronUp, Coins, Star } from 'lucide-react';
+
 import { Tooltip, HelpTooltip, HELP_CONTENT } from './Tooltip';
 import { useFavorites } from '../hooks/useFavorites';
 

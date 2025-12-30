@@ -164,10 +164,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div
-      className={`h - full bg - [#FDFCFB] border - r border - stone - 200 flex flex - col flex - shrink - 0 z - 20 transition - all duration - 300 relative group ease -in -out shadow - sm ${isCollapsed ? 'w-[72px]' : 'w-72'} `}
+      className={`h-full bg-[#FDFCFB] border-r border-stone-200 flex flex-col flex-shrink-0 z-20 transition-all duration-300 relative group ease-in-out shadow-sm ${isCollapsed ? 'w-[72px]' : 'w-72'}`}
     >
       {/* Header - Height 64px (h-16) for standard alignment */}
-      <div className={`h - 16 flex items - center border - b border - stone - 200 / 50 shrink - 0 transition - all relative ${isCollapsed ? 'justify-center px-0' : 'justify-between px-5'} `}>
+      <div className={`h-16 flex items-center border-b border-stone-200/50 shrink-0 transition-all relative ${isCollapsed ? 'justify-center px-0' : 'justify-between px-5'}`}>
         {!isCollapsed ? (
           <div className="flex items-center gap-3 text-stone-900 overflow-hidden">
             <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
@@ -184,7 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Toggle Button */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`text - stone - 400 hover: text - stone - 700 transition - colors ${isCollapsed ? 'absolute -right-3 top-12 bg-white border border-stone-200 shadow-sm rounded-full p-1 z-30' : ''} `}
+          className={`text-stone-400 hover:text-stone-700 transition-colors ${isCollapsed ? 'absolute -right-3 top-12 bg-white border border-stone-200 shadow-sm rounded-full p-1 z-30' : ''}`}
           title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {isCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-4 h-4" />}
@@ -192,13 +192,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Primary Actions */}
-      <div className={`p - 4 shrink - 0 space - y - 1.5 flex flex - col border - b border - stone - 100 / 50 ${isCollapsed ? 'items-center px-2' : ''} `}>
+      <div className={`p-4 shrink-0 space-y-1.5 flex flex-col border-b border-stone-100/50 ${isCollapsed ? 'items-center px-2' : ''}`}>
         <button
           onClick={handleCreateProject}
           disabled={isCreating}
           title="New Project"
           className={`
-            flex items - center rounded - lg font - heading font - medium text - stone - 900 bg - white border border - stone - 200 shadow - sm hover: border - stone - 300 hover: shadow - md transition - all group h - 9 disabled: opacity - 50 disabled: cursor - not - allowed
+            flex items-center rounded-lg font-heading font-medium text-stone-900 bg-white border border-stone-200 shadow-sm hover:border-stone-300 hover:shadow-md transition-all group h-9 disabled:opacity-50 disabled:cursor-not-allowed
             ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}
 `}
         >
@@ -216,12 +216,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => onChangeView('modules')}
           title="Module Library"
           className={`
-            flex items - center rounded - lg font - heading font - medium transition - all h - 9
+            flex items-center rounded-lg font-heading font-medium transition-all h-9
             ${currentView === 'modules' ? 'bg-stone-100 text-stone-900' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-700'}
             ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}
 `}
         >
-          <Library className={`shrink - 0 ${isCollapsed ? 'w-4 h-4' : 'w-4 h-4'} `} />
+          <Library className={`shrink-0 ${isCollapsed ? 'w-4 h-4' : 'w-4 h-4'}`} />
           {!isCollapsed && <span>Module Library</span>}
         </button>
       </div>
@@ -243,7 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Main Nav (Scrollable) */}
-      <div className={`flex - 1 overflow - y - auto px - 2 space - y - 0.5 ${isCollapsed ? 'scrollbar-hide' : ''} `}>
+      <div className={`flex-1 overflow-y-auto px-2 space-y-0.5 ${isCollapsed ? 'scrollbar-hide' : ''}`}>
         {/* Pinned Projects (hide when searching) */}
         {!isCollapsed && !searchTerm && pinnedProjects.length > 0 && (
           <>
@@ -257,11 +257,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const isActive = currentProjectId === project.id && currentView === 'workspace';
               return (
                 <div
-                  key={`pinned - ${project.id} `}
-                  className={`group relative flex items - center rounded - lg transition - all duration - 200 ${isActive
-                      ? 'bg-clay-100 text-stone-900'
-                      : 'text-stone-600 hover:bg-clay-50 hover:text-stone-900'
-                    } `}
+                  key={`pinned-${project.id}`}
+                  className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive
+                    ? 'bg-clay-100 text-stone-900'
+                    : 'text-stone-600 hover:bg-clay-50 hover:text-stone-900'
+                    }`}
                 >
                   {/* Active Accent Bar */}
                   {isActive && !isCollapsed && (
@@ -270,12 +270,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={() => onSelectProject(project.id)}
                     onDoubleClick={() => startEditing(project)}
-                    className={`flex items - center font - medium h - 9 font - sans w - full gap - 3 px - 3 text - sm pr - 16 ${isActive ? 'pl-5 font-semibold' : ''} `}
+                    className={`flex items-center font-medium h-9 font-sans w-full gap-3 px-3 text-sm pr-16 ${isActive ? 'pl-5 font-semibold' : ''}`}
                   >
-                    <Pin className={`flex - shrink - 0 w - 3.5 h - 3.5 transition - colors ${isActive ? 'text-clay-600' : 'text-clay-400 group-hover:text-clay-500'} `} />
+                    <Pin className={`flex-shrink-0 w-3.5 h-3.5 transition-colors ${isActive ? 'text-clay-600' : 'text-clay-400 group-hover:text-clay-500'}`} />
                     <span className="truncate text-left flex-1">{project.name}</span>
                     {project.jobs.length > 0 && (
-                      <span className={`text - [9px] px - 1.5 py - 0.5 rounded - md font - medium transition - colors ${isActive ? 'bg-clay-200 text-clay-700' : 'bg-clay-100 text-clay-500 group-hover:text-clay-600'} `}>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-clay-200 text-clay-700' : 'bg-clay-100 text-clay-500 group-hover:text-clay-600'}`}>
                         {project.jobs.length}
                       </span>
                     )}
@@ -320,10 +320,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <div
                   key={project.id}
-                  className={`group relative flex items - center rounded - lg transition - all duration - 200 ${isActive
-                      ? 'bg-clay-50 text-stone-900'
-                      : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
-                    } ${isCollapsed ? 'justify-center py-2' : ''} `}
+                  className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive
+                    ? 'bg-clay-50 text-stone-900'
+                    : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
+                    } ${isCollapsed ? 'justify-center py-2' : ''}`}
                 >
                   {/* Active Accent Bar - improved visibility */}
                   {isActive && !isCollapsed && (
@@ -352,18 +352,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onDoubleClick={() => startEditing(project)}
                         title={isCollapsed ? project.name : undefined}
                         className={`
-                                            flex items - center font - medium h - 9 font - sans
+                                            flex items-center font-medium h-9 font-sans
                                             ${isCollapsed ? 'justify-center w-9 p-0 rounded-lg' : 'w-full gap-3 px-3 text-sm pr-16'}
                                             ${isActive && !isCollapsed ? 'pl-5 font-semibold' : ''}
-`}
+}`}
                       >
-                        <History className={`flex - shrink - 0 transition - colors ${isActive ? 'text-stone-900' : 'text-stone-500 group-hover:text-stone-600'} ${isCollapsed ? 'w-4 h-4' : 'w-3.5 h-3.5'} `} />
+                        <History className={`flex-shrink-0 transition-colors ${isActive ? 'text-stone-900' : 'text-stone-500 group-hover:text-stone-600'} ${isCollapsed ? 'w-4 h-4' : 'w-3.5 h-3.5'} `} />
 
                         {!isCollapsed && (
                           <>
                             <span className="truncate text-left flex-1">{project.name}</span>
                             {project.jobs.length > 0 && (
-                              <span className={`text - [9px] px - 1.5 py - 0.5 rounded - md font - medium transition - colors ${isActive ? 'bg-stone-200 text-stone-600' : 'bg-stone-100 text-stone-500 group-hover:text-stone-600'} `}>{project.jobs.length}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-stone-200 text-stone-600' : 'bg-stone-100 text-stone-500 group-hover:text-stone-600'} `}>{project.jobs.length}</span>
                             )}
                           </>
                         )}
@@ -421,7 +421,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Footer - User Profile */}
-      <div className={`border - t border - stone - 100 bg - [#FDFCFB] shrink - 0 ${isCollapsed ? 'p-2' : 'p-4'} `}>
+      <div className={`border-t border-stone-100 bg-[#FDFCFB] shrink-0 ${isCollapsed ? 'p-2' : 'p-4'} `}>
         <UserProfile isCollapsed={isCollapsed} />
       </div>
     </div>

@@ -24,7 +24,7 @@ const LazyOnboarding = React.lazy(() => import('./components/Onboarding').then(m
 const LazyModulesManager = React.lazy(() => import('./components/ModulesManager').then(m => ({ default: m.ModulesManager })));
 const LazyBatchStatusPanel = React.lazy(() => import('./components/BatchStatusPanel').then(m => ({ default: m.BatchStatusPanel })));
 const LazyBackToTop = React.lazy(() => import('./components/BackToTop').then(m => ({ default: m.BackToTop })));
-const LazyBulkActionToolbar = React.lazy(() => import('./components/BulkActionToolbar').then(m => ({ default: m.BulkActionToolbar })));
+
 const LazySettingsPage = React.lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
