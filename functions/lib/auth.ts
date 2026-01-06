@@ -213,13 +213,25 @@ async function verifyFirebaseToken(token: string): Promise<{ uid: string; email:
  * Extract auth context from request
  */
 export async function getAuthContext(request: Request): Promise<AuthContext> {
+    let token: string | undefined;
     const authHeader = request.headers.get('Authorization');
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+    } else {
+        // Fallback: Check query param (for <img> tags etc)
+        try {
+            const url = new URL(request.url);
+            token = url.searchParams.get('auth_token') || undefined;
+        } catch (e) {
+            // ignore invalid URL
+        }
+    }
+
+    if (!token) {
         return { userId: null, userEmail: null };
     }
 
-    const token = authHeader.substring(7);
     const decoded = await verifyFirebaseToken(token);
 
     if (!decoded) {

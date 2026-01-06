@@ -4,6 +4,7 @@ import { X, Sparkles, ScanEye, Wand2, Download, Copy, Trash2, RefreshCcw, CheckC
 import { enhancePrompt, generateImageDescription, generateSmartFilename } from '../services/geminiService';
 import { api } from '../services/api';
 import { useConfirmDialog } from './ConfirmDialog';
+import { AuthenticatedImage } from './AuthenticatedImage';
 // @ts-ignore
 import JSZip from 'jszip';
 
@@ -258,7 +259,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                             className="aspect-square rounded-xl overflow-hidden bg-stone-100 cursor-zoom-in group relative"
                             onClick={() => onZoom(job.resultUrl || job.thumbnailUrl)}
                         >
-                            <img src={job.resultUrl || job.thumbnailUrl} className="w-full h-full object-cover" alt="Preview" loading="lazy" />
+                            <AuthenticatedImage src={job.resultUrl || job.thumbnailUrl} className="w-full h-full object-cover" alt="Preview" loading="lazy" />
                             <div className="absolute inset-0 bg-stone-900/0 group-hover:bg-stone-900/10 transition-colors flex items-center justify-center">
                                 <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-lg transition-opacity" />
                             </div>
@@ -280,7 +281,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                                         <div key={ver.id} className="flex items-center justify-between p-2 hover:bg-white rounded-lg group transition-colors cursor-pointer" onClick={() => onZoom(ver.resultUrl)}>
                                             <div className="flex items-center gap-2.5 min-w-0">
                                                 <div className="w-8 h-8 rounded bg-stone-200 overflow-hidden shrink-0 border border-stone-200">
-                                                    <img src={ver.resultUrl} className="w-full h-full object-cover" alt="" />
+                                                    <AuthenticatedImage src={ver.resultUrl} className="w-full h-full object-cover" alt="" />
                                                 </div>
                                                 <div className="min-w-0">
                                                     <div className="text-xs font-semibold text-stone-700">Version {ver.version}</div>
@@ -498,6 +499,15 @@ export const Inspector: React.FC<InspectorProps> = ({
                     onClick={handleClose}
                     aria-hidden="true"
                 />
+            )}
+
+            {zoomedImage && (
+                <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-200" onClick={() => setZoomedImage(null)}>
+                    <AuthenticatedImage src={zoomedImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" alt="Zoomed" />
+                    <button className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
+                        <X className="w-8 h-8" />
+                    </button>
+                </div>
             )}
 
             {/* Panel */}
