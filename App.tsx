@@ -17,7 +17,7 @@ import { generateThumbnail, wait, calculateBackoff } from './utils';
 import { useSettings } from './hooks/useSettings';
 import { api } from './services/api';
 import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, arrayMove, useSortable } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 const LazyInspector = React.lazy(() => import('./components/Inspector').then(m => ({ default: m.Inspector })));
