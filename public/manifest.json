@@ -8,23 +8,15 @@
   "theme_color": "#D97757",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-192.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-512.svg",
+      "src": "/logo.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
-  "categories": ["productivity", "utilities", "photo"]
+  "categories": [
+    "productivity",
+    "utilities",
+    "photo"
+  ]
 }

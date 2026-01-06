@@ -45,13 +45,13 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     // and provides good performance (tested on V8, SpiderMonkey, JSC)
     const chunkSize = 8192;
     const chunks: string[] = [];
-    
+
     for (let i = 0; i < bytes.length; i += chunkSize) {
         const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
         // String.fromCharCode.apply is safe with 8192 elements
         chunks.push(String.fromCharCode.apply(null, chunk as unknown as number[]));
     }
-    
+
     return btoa(chunks.join(''));
 }
 
@@ -71,7 +71,7 @@ async function processImage(
     data: ProcessImageData
 ): Promise<{ success: boolean; imageBytes?: string; error?: string }> {
     const startTime = Date.now();
-    
+
     try {
         const requestPayload = {
             model: modelName,
@@ -94,13 +94,13 @@ async function processImage(
         };
 
         const response = await ai.models.generateContent(requestPayload);
-        
+
         const parts = response.candidates?.[0]?.content?.parts || [];
         const imagePart = parts.find((p: any) => p.inlineData);
 
         if (!imagePart?.inlineData?.data) {
             const textPart = parts.find((p: any) => p.text);
-            throw new Error(textPart 
+            throw new Error(textPart
                 ? `Model returned text: ${(textPart as any).text?.substring(0, 100)}...`
                 : "No image in response"
             );
@@ -116,31 +116,31 @@ async function processImage(
         return { success: true, imageBytes: imagePart.inlineData.data };
     } catch (error: any) {
         const errorMessage = error?.message || 'Unknown error';
-        
+
         // Record failure metric
         recordMetric({
             duration: Date.now() - startTime,
             tokens: estimateTokens(data.imageData.length, data.prompt.length),
             success: false,
-            errorType: errorMessage.includes('429') ? '429_rate_limit' : 
-                       errorMessage.includes('503') ? '503_unavailable' : 'error',
+            errorType: errorMessage.includes('429') ? '429_rate_limit' :
+                errorMessage.includes('503') ? '503_unavailable' : 'error',
         });
 
         // Determine if retryable
-        const isRetryable = 
+        const isRetryable =
             errorMessage.includes('429') ||
             errorMessage.includes('503') ||
             errorMessage.includes('RESOURCE_EXHAUSTED');
 
         const err: any = new Error(errorMessage);
         err.retryable = isRetryable;
-        
+
         // Parse retry delay
         const retryMatch = errorMessage.match(/retryDelay[^0-9]*"?(\d+)s"?/i);
         if (retryMatch) {
             err.retryAfterMs = parseInt(retryMatch[1], 10) * 1000;
         }
-        
+
         throw err;
     }
 }
@@ -184,9 +184,9 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         // Limit batch size for safety
         const maxBatchSize = Math.min(GEMINI_LIMITS.BATCH_SIZE * 3, 30); // Max 30 at once
         if (jobIds.length > maxBatchSize) {
-            return jsonResponse({ 
-                success: false, 
-                error: `Batch size exceeds maximum (${maxBatchSize}). Process in smaller batches.` 
+            return jsonResponse({
+                success: false,
+                error: `Batch size exceeds maximum (${maxBatchSize}). Process in smaller batches.`
             }, 400);
         }
 
@@ -233,6 +233,27 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
             const mimeType = obj.httpMetadata?.contentType || 'image/jpeg';
             const fullPrompt = `${systemPrompt || imageRecord.module_prompt || ''}\n\n${imageRecord.prompt || ''}`.trim();
 
+            // Versioning: If this image was previously processed, archive the old version
+            if (imageRecord.status === 'completed' && imageRecord.r2_key_result) {
+                const historyId = crypto.randomUUID();
+                // Archive the CURRENT state as a history record
+                await context.env.DB.prepare(`
+                    INSERT INTO images (
+                        id, job_id, status, filename, r2_key_original, r2_key_result, 
+                        prompt, generated_prompt, description, error_msg, parent_id, version, created_at
+                    )
+                    SELECT 
+                        ?, job_id, 'completed', filename, r2_key_original, r2_key_result,
+                        COALESCE(generated_prompt, prompt), generated_prompt, description, error_msg, ?, version, created_at
+                    FROM images WHERE id = ?
+                `).bind(historyId, jobId, jobId).run();
+
+                // Increment version on the main record
+                await context.env.DB.prepare(
+                    "UPDATE images SET version = IFNULL(version, 1) + 1 WHERE id = ?"
+                ).bind(jobId).run();
+            }
+
             // Smart cache check: same (model + original key + prompt) => reuse
             if (cacheEnabled) {
                 const hash = await sha256Hex(`${modelName}\n${imageRecord.r2_key_original}\n${fullPrompt}`);
@@ -259,7 +280,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
                     prompt: fullPrompt,
                 },
                 processor: async (data) => {
-                    const result = await withCircuitBreaker(() => 
+                    const result = await withCircuitBreaker(() =>
                         processImage(ai, modelName, data)
                     );
                     if (!result.success || !result.imageBytes) {
@@ -288,7 +309,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         if (failed.length > 0) {
             console.log(`[Process Parallel] Retrying ${failed.length} failed tasks`);
             const retryResults = await retryFailedTasks(failed, tasks, 1); // 1 retry
-            
+
             // Merge retry results
             for (const retryResult of retryResults) {
                 const idx = results.findIndex(r => r.id === retryResult.id);
@@ -305,7 +326,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
             if (result.success && result.result?.imageBytes) {
                 const cacheMeta = cacheEnabled ? cacheMetaByJobId.get(result.id) : undefined;
                 const resultKey = cacheMeta?.resultKey || `result-${result.id}.png`;
-                
+
                 // Decode base64 to binary
                 const binaryString = atob(result.result.imageBytes);
                 const bytes = new Uint8Array(binaryString.length);
@@ -329,8 +350,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
 
                 // Update DB
                 await context.env.DB.prepare(
-                    "UPDATE images SET status = ?, r2_key_result = ? WHERE id = ?"
-                ).bind('completed', resultKey, result.id).run();
+                    "UPDATE images SET status = ?, r2_key_result = ?, generated_prompt = ? WHERE id = ?"
+                ).bind('completed', resultKey, fullPrompt, result.id).run();
 
                 processed.push({ jobId: result.id, success: true });
             } else {

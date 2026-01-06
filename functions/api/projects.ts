@@ -43,7 +43,8 @@ export async function onRequestGet(context: { request: Request; env: Env }) {
 
     // Map DB to Frontend Project
     const projects = await Promise.all(results.map(async (job: any) => {
-      const images = await context.env.DB.prepare("SELECT * FROM images WHERE job_id = ?").bind(job.id).all();
+      // Only fetch HEAD versions (parent_id IS NULL) for the main view
+      const images = await context.env.DB.prepare("SELECT * FROM images WHERE job_id = ? AND parent_id IS NULL").bind(job.id).all();
 
       // Collect all R2 keys for presigning
       const r2Keys: string[] = [];
@@ -87,7 +88,10 @@ export async function onRequestGet(context: { request: Request; env: Env }) {
           thumbnailUrl: getImageUrl(img.r2_key_original),
           localPrompt: img.prompt || '',
           retryCount: 0,
+          retryCount: 0,
           timestamp: img.created_at,
+          parentId: img.parent_id,
+          version: img.version || 1
         })),
         modulePrompt: job.module_prompt || '',
         selectedMode: job.selected_mode || 'fast',

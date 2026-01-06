@@ -31,6 +31,7 @@ const LazyReportModal = React.lazy(() => import('./components/ReportModal').then
 const LazySettingsPage = React.lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useHistory } from './hooks/useHistory';
+import { UndoRedoToolbar } from './components/UndoRedoToolbar';
 
 // Tier 1 Optimized Settings
 // With paid Tier 1 limits (500 RPM, 500K TPM), we can process much faster
@@ -136,6 +137,11 @@ function AppContent() {
     const projectsFutureRef = useRef<Project[][]>([]);
     const lastProjectsSnapshotTimeRef = useRef<number>(0);
 
+    // Reactive state for UI (force re-render when history changes)
+    const [canUndoState, setCanUndoState] = useState(false);
+    const [canRedoState, setCanRedoState] = useState(false);
+    const [historyLengthState, setHistoryLengthState] = useState(0);
+
     const pushProjectsHistory = useCallback(() => {
         const now = Date.now();
         // Debounce: only push if more than 500ms since last snapshot
@@ -143,6 +149,10 @@ function AppContent() {
             projectsHistoryRef.current = [...projectsHistoryRef.current.slice(-49), projectsRef.current];
             projectsFutureRef.current = []; // Clear future on new action
             lastProjectsSnapshotTimeRef.current = now;
+            // Update reactive state
+            setCanUndoState(true);
+            setCanRedoState(false);
+            setHistoryLengthState(projectsHistoryRef.current.length);
         }
     }, []);
 
@@ -156,6 +166,10 @@ function AppContent() {
         projectsFutureRef.current = [projectsRef.current, ...projectsFutureRef.current];
         setProjects(previous);
         toast.success('Undone');
+        // Update reactive state
+        setCanUndoState(projectsHistoryRef.current.length > 0);
+        setCanRedoState(true);
+        setHistoryLengthState(projectsHistoryRef.current.length);
     }, []);
 
     const redoProjects = useCallback(() => {
@@ -168,6 +182,10 @@ function AppContent() {
         projectsHistoryRef.current = [...projectsHistoryRef.current, projectsRef.current];
         setProjects(next);
         toast.success('Redone');
+        // Update reactive state
+        setCanUndoState(true);
+        setCanRedoState(projectsFutureRef.current.length > 0);
+        setHistoryLengthState(projectsHistoryRef.current.length);
     }, []);
 
     useEffect(() => {
@@ -1441,6 +1459,15 @@ function AppContent() {
 
                             {/* RIGHT ZONE: Actions & View */}
                             <div className="flex items-center gap-3">
+                                {/* Undo/Redo Toolbar */}
+                                <UndoRedoToolbar
+                                    canUndo={canUndoState}
+                                    canRedo={canRedoState}
+                                    onUndo={undoProjects}
+                                    onRedo={redoProjects}
+                                    historyLength={historyLengthState}
+                                />
+
                                 {/* View Controls Group */}
                                 <div className="hidden lg:flex items-center gap-2 p-1 bg-white rounded-xl border border-stone-200 shadow-sm">
                                     <div className="flex items-center gap-2 px-2" title="Image Size">

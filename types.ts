@@ -80,6 +80,10 @@ export interface ImageJob {
 
   // Interaction
   selected?: boolean;
+
+  // Versioning
+  parentId?: string;  // ID of parent image (for version chain)
+  version?: number;   // Version number (1 = original)
 }
 
 export interface Project {

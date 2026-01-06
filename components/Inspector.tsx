@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ImageJob } from '../types';
-import { X, Sparkles, ScanEye, Wand2, Download, Copy, Trash2, RefreshCcw, CheckCircle2, Maximize2, AlertCircle, BoxSelect, DownloadCloud } from 'lucide-react';
+import { X, Sparkles, ScanEye, Wand2, Download, Copy, Trash2, RefreshCcw, CheckCircle2, Maximize2, AlertCircle, BoxSelect, DownloadCloud, History as HistoryIcon, Clock } from 'lucide-react';
 import { enhancePrompt, generateImageDescription, generateSmartFilename } from '../services/geminiService';
+import { api } from '../services/api';
 import { useConfirmDialog } from './ConfirmDialog';
 // @ts-ignore
 import JSZip from 'jszip';
@@ -54,6 +55,8 @@ export const Inspector: React.FC<InspectorProps> = ({
 
     const [isDownloadingZip, setIsDownloadingZip] = useState(false);
     const [zipProgress, setZipProgress] = useState<number | undefined>(undefined);
+    const [history, setHistory] = useState<any[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
 
     // Responsive: use lg breakpoint (1024px)
     const isMobile = useMediaQuery('(max-width: 1023px)');
@@ -71,7 +74,20 @@ export const Inspector: React.FC<InspectorProps> = ({
         setZipProgress(undefined);
         setBatchPrompt('');
         setIsOpen(true);
-    }, [selectedJobs.map(j => j.id).join(',')]);
+        setHistory([]);
+
+        // Fetch history if single selection
+        if (selectedJobs.length === 1) {
+            const job = selectedJobs[0];
+            if ((job.version || 1) > 1) {
+                setLoadingHistory(true);
+                api.getHistory(job.id).then(h => {
+                    setHistory(h);
+                    setLoadingHistory(false);
+                });
+            }
+        }
+    }, [selectedJobs.map(j => j.id).join(','), selectedJobs[0]?.version]);
 
     // Close on Escape
     useEffect(() => {
@@ -217,8 +233,8 @@ export const Inspector: React.FC<InspectorProps> = ({
                             <div className="min-w-0">
                                 <h3
                                     className={`text-sm font-semibold truncate transition-colors ${job.status === 'completed' ? 'text-green-600' :
-                                            job.status === 'error' ? 'text-red-600' :
-                                                'text-stone-900'
+                                        job.status === 'error' ? 'text-red-600' :
+                                            'text-stone-900'
                                         }`}
                                     title={job.fileName}
                                 >
@@ -246,7 +262,42 @@ export const Inspector: React.FC<InspectorProps> = ({
                             <div className="absolute inset-0 bg-stone-900/0 group-hover:bg-stone-900/10 transition-colors flex items-center justify-center">
                                 <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-lg transition-opacity" />
                             </div>
+                            {(job.version || 1) > 1 && (
+                                <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white px-2 py-0.5 rounded-full text-[10px] font-bold border border-white/20">
+                                    v{job.version}
+                                </div>
+                            )}
                         </div>
+
+                        {/* Version History */}
+                        {history.length > 0 && (
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-xs font-bold text-stone-500 uppercase tracking-wider">
+                                    <HistoryIcon className="w-3.5 h-3.5" /> Version History
+                                </div>
+                                <div className="space-y-1.5 p-2 bg-stone-50 rounded-xl border border-stone-100">
+                                    {history.map((ver) => (
+                                        <div key={ver.id} className="flex items-center justify-between p-2 hover:bg-white rounded-lg group transition-colors cursor-pointer" onClick={() => onZoom(ver.resultUrl)}>
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="w-8 h-8 rounded bg-stone-200 overflow-hidden shrink-0 border border-stone-200">
+                                                    <img src={ver.resultUrl} className="w-full h-full object-cover" alt="" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-xs font-semibold text-stone-700">Version {ver.version}</div>
+                                                    <div className="text-[10px] text-stone-400 flex items-center gap-1">
+                                                        <Clock className="w-2.5 h-2.5" />
+                                                        {new Date(ver.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button className="text-[10px] font-bold text-clay-600 hover:underline">View</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Error State */}
                         {isAiFailed && aiError && (

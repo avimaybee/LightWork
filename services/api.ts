@@ -173,6 +173,20 @@ export const api = {
         }
     },
 
+    getHistory: async (imageId: string): Promise<any[]> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/images/${imageId}/history`, {
+                headers: authHeaders
+            });
+            if (res.ok) return await res.json();
+            return [];
+        } catch (e) {
+            console.error('Failed to fetch history', e);
+            return [];
+        }
+    },
+
     // AI-powered semantic search
     searchImages: async (images: Array<{ id: string, filename: string, thumbnailUrl: string }>, query: string): Promise<string[]> => {
         try {

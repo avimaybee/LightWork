@@ -72,13 +72,13 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         }
 
         const rawBody = await context.request.json();
-        
+
         // Validate input with Zod schema
         const validation = validateRequest(processRequestSchema, rawBody);
         if (!validation.success) {
             return jsonResponse({ success: false, error: validation.error }, 400);
         }
-        
+
         const body = validation.data;
         requestId = body.requestId || null;
         jobId = body.jobId;
@@ -163,6 +163,32 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         const fullPrompt = `${systemPrompt}\n\n${userPrompt || ''}`.trim();
         console.log("[Process API] Prompt length:", fullPrompt.length);
 
+        // 3.5 Versioning: If this image was previously processed, archive the old version
+        // We do this BEFORE processing to ensure we capture the state that produced the *current* result
+        // before we potentially overwrite it.
+        if (imageRecord.status === 'completed' && imageRecord.r2_key_result) {
+            const historyId = crypto.randomUUID();
+            console.log("[Process API] Archiving previous version to:", historyId);
+
+            // Archive the CURRENT state as a history record
+            // Use 'generated_prompt' if available (the prompt that made the result), otherwise fallback to 'prompt'
+            await context.env.DB.prepare(`
+                INSERT INTO images (
+                    id, job_id, status, filename, r2_key_original, r2_key_result, 
+                    prompt, generated_prompt, description, error_msg, parent_id, version, created_at
+                )
+                SELECT 
+                    ?, job_id, 'completed', filename, r2_key_original, r2_key_result,
+                    COALESCE(generated_prompt, prompt), generated_prompt, description, error_msg, ?, version, created_at
+                FROM images WHERE id = ?
+            `).bind(historyId, jobId, jobId).run();
+
+            // Increment version on the main record
+            await context.env.DB.prepare(
+                "UPDATE images SET version = IFNULL(version, 1) + 1 WHERE id = ?"
+            ).bind(jobId).run();
+        }
+
         // 3.5 Smart cache: if we already processed the same image+prompt, reuse the result
         const cacheEnabled = !!context.env.CACHE_KV;
         let cacheKvKey: string | null = null;
@@ -194,7 +220,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
                     return jsonResponse({ success: true, imageBytes: cachedImageBytes, requestId, cached: true });
                 } else {
                     // Stale cache entry
-                    try { await context.env.CACHE_KV!.delete(cacheKvKey); } catch {}
+                    try { await context.env.CACHE_KV!.delete(cacheKvKey); } catch { }
                     cachedResultKey = null;
                 }
             }
@@ -278,8 +304,9 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         }
 
         // 7. Update DB
-        await context.env.DB.prepare("UPDATE images SET status = ?, r2_key_result = ?, error_msg = NULL WHERE id = ?")
-            .bind('completed', resultKey, jobId).run();
+        // Save the userPrompt as the 'generated_prompt' so we know exactly what text produced this result
+        await context.env.DB.prepare("UPDATE images SET status = ?, r2_key_result = ?, generated_prompt = ?, error_msg = NULL WHERE id = ?")
+            .bind('completed', resultKey, userPrompt || '', jobId).run();
 
         // Return bytes to frontend for immediate display
         console.log("[Process API] Job completed successfully");

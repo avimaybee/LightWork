@@ -32,10 +32,14 @@ CREATE TABLE IF NOT EXISTS images (
     r2_key_original TEXT,
     r2_key_result TEXT,
     prompt TEXT,
+    generated_prompt TEXT,         -- The prompt used to generate the result
     description TEXT,              -- AI-generated description for search indexing
     error_msg TEXT,
+    parent_id TEXT,                -- Reference to parent image (for versioning)
+    version INTEGER DEFAULT 1,     -- Version number (1 = original)
     created_at INTEGER,
-    FOREIGN KEY (job_id) REFERENCES jobs(id)
+    FOREIGN KEY (job_id) REFERENCES jobs(id),
+    FOREIGN KEY (parent_id) REFERENCES images(id)
 );
 
 -- Modules table

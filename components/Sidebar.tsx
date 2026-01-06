@@ -5,6 +5,7 @@ import { Plus, Settings, Command, Search, Archive, Check, Trash2, Library, Panel
 import { useAuth } from '../services/authContext';
 import { getGradient } from '../utils';
 import { useSidebar } from '../hooks/useSidebar';
+import { ProjectMenu } from './ProjectMenu';
 
 interface SidebarProps {
   projects: Project[];
@@ -356,40 +357,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </button>
 
                       {!isCollapsed && (
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all z-10">
-                          {!isPinned(project.id) && pinnedIds.length < MAX_PINNED && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); togglePin(project.id); }}
-                              className="p-1.5 text-stone-300 hover:text-clay-600 hover:bg-clay-50 rounded-md transition-colors"
-                              title="Pin to top"
-                              aria-label={`Pin ${project.name}`}
-                            >
-                              <Pin className="w-3 h-3" aria-hidden="true" />
-                            </button>
-                          )}
-                          {onDuplicateProject && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onDuplicateProject(project.id); }}
-                              className="p-1.5 text-stone-300 hover:text-stone-600 hover:bg-stone-50 rounded-md transition-colors"
-                              title="Duplicate Project"
-                              aria-label={`Duplicate ${project.name}`}
-                            >
-                              <Copy className="w-3 h-3" aria-hidden="true" />
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all z-10">
+                          <ProjectMenu
+                            projectName={project.name}
+                            isPinned={isPinned(project.id)}
+                            canPin={pinnedIds.length < MAX_PINNED}
+                            onRename={() => startEditing(project)}
+                            onDuplicate={onDuplicateProject ? () => onDuplicateProject(project.id) : undefined}
+                            onTogglePin={() => togglePin(project.id)}
+                            onDelete={() => {
                               if (confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
                                 onDeleteProject(project.id);
                               }
                             }}
-                            className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                            title="Delete Project"
-                            aria-label={`Delete ${project.name}`}
-                          >
-                            <Trash2 className="w-3 h-3" aria-hidden="true" />
-                          </button>
+                          />
                         </div>
                       )}
                     </>
