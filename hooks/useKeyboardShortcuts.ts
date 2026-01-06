@@ -13,6 +13,8 @@ interface ShortcutConfig {
     onProcess: () => void;
     onNavigate: (direction: 'up' | 'down' | 'left' | 'right') => void;
     onSpace: () => void;
+    onUndo?: () => void;
+    onRedo?: () => void;
 }
 
 export function useKeyboardShortcuts({
@@ -27,15 +29,17 @@ export function useKeyboardShortcuts({
     onSelectAll,
     onProcess,
     onNavigate,
-    onSpace
+    onSpace,
+    onUndo,
+    onRedo
 }: ShortcutConfig) {
 
     // Refs to avoid dependency cycles / stale closures in event listener
-    const handlers = useRef({ onEscape, onDelete, onSelectAll, onProcess, onNavigate, onSpace });
+    const handlers = useRef({ onEscape, onDelete, onSelectAll, onProcess, onNavigate, onSpace, onUndo, onRedo });
 
     useEffect(() => {
-        handlers.current = { onEscape, onDelete, onSelectAll, onProcess, onNavigate, onSpace };
-    }, [onEscape, onDelete, onSelectAll, onProcess, onNavigate, onSpace]);
+        handlers.current = { onEscape, onDelete, onSelectAll, onProcess, onNavigate, onSpace, onUndo, onRedo };
+    }, [onEscape, onDelete, onSelectAll, onProcess, onNavigate, onSpace, onUndo, onRedo]);
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -45,6 +49,20 @@ export function useKeyboardShortcuts({
 
             const key = e.key.toLowerCase();
             const isMod = e.ctrlKey || e.metaKey;
+
+            // Global: Undo (Cmd+Z)
+            if (isMod && key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                handlers.current.onUndo?.();
+                return;
+            }
+
+            // Global: Redo (Cmd+Shift+Z)
+            if (isMod && key === 'z' && e.shiftKey) {
+                e.preventDefault();
+                handlers.current.onRedo?.();
+                return;
+            }
 
             // Global: Escape
             if (key === 'escape' && !isTypingTarget) {

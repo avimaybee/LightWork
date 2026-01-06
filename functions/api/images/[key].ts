@@ -19,6 +19,89 @@ async function moveR2KeyToTrash(storage: R2Bucket, key: string, now: number) {
   await storage.delete(key);
 }
 
+// PATCH /api/images/:id - Update image metadata
+export async function onRequestPatch(context: any) {
+  try {
+    const auth = await getAuthContext(context.request);
+
+    if (!auth.userId) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const imageId = context.params.key;
+    if (!imageId) {
+      return new Response(JSON.stringify({ error: 'Missing image ID' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Parse request body
+    const body = await context.request.json();
+    const { fileName, localPrompt } = body;
+
+    // Verify ownership
+    const image = await context.env.DB.prepare(`
+      SELECT i.id, j.user_id 
+      FROM images i
+      JOIN jobs j ON i.job_id = j.id
+      WHERE i.id = ?
+    `).bind(imageId).first();
+
+    if (!image) {
+      return new Response(JSON.stringify({ error: 'Image not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (image.user_id !== auth.userId) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Build dynamic update query
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (fileName !== undefined) {
+      updates.push('filename = ?');
+      values.push(fileName);
+    }
+
+    if (localPrompt !== undefined) {
+      updates.push('prompt = ?');
+      values.push(localPrompt);
+    }
+
+    if (updates.length === 0) {
+      return new Response(JSON.stringify({ success: true, message: 'No updates provided' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    values.push(imageId);
+    const sql = `UPDATE images SET ${updates.join(', ')} WHERE id = ?`;
+
+    await context.env.DB.prepare(sql).bind(...values).run();
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (e: any) {
+    console.error('[Images API] Patch error:', e);
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
 export async function onRequestDelete(context: any) {
   try {
     const auth = await getAuthContext(context.request);
@@ -93,6 +176,15 @@ export async function onRequestDelete(context: any) {
 }
 
 export async function onRequestGet(context) {
+  // Require authentication for the proxy endpoint (fallback when presigned URLs aren't used)
+  const auth = await getAuthContext(context.request);
+  if (!auth.userId) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
   // Get the key from params - may be URL encoded
   let key = context.params.key;
 
@@ -103,6 +195,21 @@ export async function onRequestGet(context) {
     key = decodeURIComponent(key);
   } catch (e) {
     // Key wasn't encoded, use as-is
+  }
+
+  // Verify ownership by checking if the image belongs to a project owned by this user
+  const image = await context.env.DB.prepare(`
+    SELECT i.id, j.user_id 
+    FROM images i
+    JOIN jobs j ON i.job_id = j.id
+    WHERE i.r2_key_original = ? OR i.r2_key_result = ?
+  `).bind(key, key).first();
+
+  if (image && image.user_id !== auth.userId) {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   console.log("[Images API] Fetching key:", key);

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Module, DEFAULT_MODULES } from '../types';
 import { ArrowLeft, Plus, Trash2, Edit3, Save, X, LayoutGrid, Check, Terminal, Star, Search, RotateCcw, Sparkles, RefreshCcw } from 'lucide-react';
-import { ArrowLeft, Plus, Trash2, Edit3, Save, X, LayoutGrid, Check, Terminal, Star, Search, RotateCcw, Sparkles, RefreshCcw } from 'lucide-react';
 import { enhancePrompt } from '../services/geminiService';
 import { useFavorites } from '../hooks/useFavorites';
 
@@ -153,7 +152,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
     return (
         <div className="flex-1 h-full flex flex-col bg-[#F2F0E9] overflow-hidden relative font-sans">
             {/* Header */}
-            <div className="h-20 flex items-center px-10 border-b border-stone-200 bg-[#F2F0E9]/80 backdrop-blur-md shrink-0">
+            <div className="h-20 flex items-center px-10 border-b border-stone-200/50 bg-[#F2F0E9]/80 backdrop-blur-md shrink-0 sticky top-0 z-20">
                 <button
                     onClick={onBack}
                     className="flex items-center gap-2 text-stone-500 hover:text-stone-900 transition-colors mr-6"
@@ -171,7 +170,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                         placeholder="Search modules..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-white border border-stone-200 rounded-lg pl-10 pr-4 h-10 text-sm font-medium text-stone-700 placeholder:text-stone-400 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400/20 transition-all font-sans shadow-sm"
+                        className="w-full bg-white border border-stone-200 rounded-lg pl-10 pr-4 h-10 text-sm font-medium text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-4 focus:ring-clay-500/5 focus:border-clay-400 transition-all font-sans shadow-sm"
                     />
                     {searchTerm && (
                         <button
@@ -191,12 +190,12 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                     {/* Create New Card */}
                     <div
                         onClick={() => setIsCreating(true)}
-                        className="border border-dashed border-stone-300 rounded-xl p-8 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all hover:border-clay-400 hover:bg-white/50 group h-full min-h-[280px]"
+                        className="section-outline p-8 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all hover:border-clay-400 hover:bg-white/80 group h-full min-h-[280px] border-dashed border-2"
                     >
-                        <div className="w-14 h-14 rounded-full bg-white border border-stone-200 shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Plus className="w-6 h-6 text-stone-400 group-hover:text-clay-600" />
+                        <div className="w-14 h-14 rounded-full bg-white border border-stone-200 shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform group-hover:border-clay-200">
+                            <Plus className="w-6 h-6 text-stone-400 group-hover:text-clay-500" />
                         </div>
-                        <span className="font-bold text-stone-600 text-lg font-heading">Create New Module</span>
+                        <span className="font-bold text-stone-500 text-lg font-heading group-hover:text-stone-700">Create New Module</span>
                     </div>
 
                     {/* Module Cards */}
@@ -204,7 +203,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                         <div
                             key={module.id}
                             onClick={() => openModule(module)}
-                            className="bg-[#FDFCFB] rounded-xl border border-stone-200 shadow-sm hover:shadow-xl transition-all flex flex-col h-full min-h-[280px] relative group overflow-hidden cursor-pointer hover:-translate-y-1"
+                            className="bg-white rounded-xl border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all flex flex-col h-full min-h-[280px] relative group overflow-hidden cursor-pointer hover:-translate-y-1"
                         >
                             {/* Card Header */}
                             <div className="p-6 border-b border-stone-100 flex items-start justify-between">
@@ -261,8 +260,8 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
 
             {/* Edit Modal Overlay */}
             {selectedModule && (
-                <div className="absolute inset-0 z-50 bg-stone-900/20 backdrop-blur-sm flex items-center justify-center p-8 animate-in fade-in duration-200">
-                    <div className="bg-[#FDFCFB] rounded-2xl shadow-2xl max-w-3xl w-full h-full max-h-[85vh] flex flex-col overflow-hidden ring-1 ring-white/50 animate-in slide-in-from-bottom-8 zoom-in-95 duration-300">
+                <div className="absolute inset-0 z-50 bg-stone-900/10 backdrop-blur-md flex items-center justify-center p-8 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full h-full max-h-[85vh] flex flex-col overflow-hidden ring-1 ring-stone-900/5 animate-in slide-in-from-bottom-8 zoom-in-95 duration-300">
                         {/* Modal Header */}
                         <div className="p-8 border-b border-stone-100 flex items-center justify-between bg-stone-50/30">
                             <div className="flex items-center gap-4">
@@ -298,7 +297,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                                     <button
                                         onClick={() => handleEnhance(editPrompt, setEditPrompt)}
                                         disabled={isEnhancing || !editPrompt.trim()}
-                                        className="text-stone-400 hover:text-purple-600 transition-colors p-1"
+                                        className="text-stone-400 hover:text-clay-600 transition-colors p-1"
                                         title="Enhance with AI"
                                     >
                                         {isEnhancing ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -311,7 +310,7 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
                             <textarea
                                 value={editPrompt}
                                 onChange={(e) => setEditPrompt(e.target.value)}
-                                className="flex-1 w-full bg-stone-50 border border-stone-200 rounded-xl p-6 text-sm font-mono text-stone-700 leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-stone-900/5 focus:border-stone-400"
+                                className="flex-1 w-full bg-stone-50 border border-stone-200 rounded-xl p-6 text-sm font-mono text-stone-700 leading-relaxed resize-none focus:outline-none focus:ring-4 focus:ring-clay-500/5 focus:border-clay-400"
                                 placeholder="Enter detailed system instructions..."
                                 spellCheck={false}
                                 autoFocus
@@ -357,8 +356,8 @@ export const ModulesManager: React.FC<ModulesManagerProps> = ({ modules, onCreat
 
             {/* Create Module Modal */}
             {isCreating && (
-                <div className="absolute inset-0 z-50 bg-stone-900/20 backdrop-blur-sm flex items-center justify-center p-8 animate-in fade-in duration-200">
-                    <div className="bg-[#FDFCFB] rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden ring-1 ring-white/50 animate-in slide-in-from-bottom-8 zoom-in-95 duration-300">
+                <div className="absolute inset-0 z-50 bg-stone-900/10 backdrop-blur-md flex items-center justify-center p-8 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden ring-1 ring-stone-900/5 animate-in slide-in-from-bottom-8 zoom-in-95 duration-300">
                         {/* Modal Header */}
                         <div className="p-8 border-b border-stone-100 flex items-center justify-between bg-stone-50/30">
                             <div className="flex items-center gap-4">

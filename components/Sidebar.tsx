@@ -1,9 +1,10 @@
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Project } from '../types';
-import { Plus, Settings, Command, Key, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, Box, LogOut, User, Loader2, Pin, PinOff, Copy } from 'lucide-react';
+import { Plus, Settings, Command, Search, Archive, Check, Trash2, Library, PanelLeftClose, PanelLeftOpen, History, LogOut, Loader2, Pin, PinOff, Copy, X, Menu, Sparkles } from 'lucide-react';
 import { useAuth } from '../services/authContext';
 import { getGradient } from '../utils';
+import { useSidebar } from '../hooks/useSidebar';
 
 interface SidebarProps {
   projects: Project[];
@@ -32,16 +33,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   onChangeView
 }) => {
+  const { isOpen, isCollapsed, close, toggleCollapse } = useSidebar();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
 
   const observerTarget = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   // Load pinned projects from localStorage
   useEffect(() => {
@@ -68,10 +71,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Toggle pin status
   const togglePin = (projectId: string) => {
     if (pinnedIds.includes(projectId)) {
-      // Unpin
       savePinnedIds(pinnedIds.filter(id => id !== projectId));
     } else {
-      // Pin (if under limit)
       if (pinnedIds.length < MAX_PINNED) {
         savePinnedIds([...pinnedIds, projectId]);
       }
@@ -98,17 +99,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Search Filter (excluding pinned projects to avoid duplication when not searching)
+  // Search Filter
   const filteredProjects = useMemo(() => {
     const filtered = projects.filter(p =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-
-    // When searching, show all matches; otherwise exclude pinned projects
     if (searchTerm) {
       return filtered;
     }
-
     const pinnedIdSet = new Set(pinnedIds);
     return filtered.filter(p => !pinnedIdSet.has(p.id));
   }, [projects, searchTerm, pinnedIds]);
@@ -128,11 +126,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       },
       { threshold: 1.0 }
     );
-
     if (observerTarget.current) {
       observer.observe(observerTarget.current);
     }
-
     return () => observer.disconnect();
   }, [displayedProjects.length, filteredProjects.length]);
 
@@ -142,12 +138,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       inputRef.current.focus();
     }
   }, [editingId]);
-
-  const handleKeyUpdate = async () => {
-    if (window.aistudio && window.aistudio.openSelectKey) {
-      await window.aistudio.openSelectKey();
-    }
-  };
 
   const startEditing = (project: Project) => {
     if (isCollapsed) return;
@@ -162,32 +152,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setEditingId(null);
   };
 
-  return (
-    <div
-      className={`h-full bg-[#FDFCFB] border-r border-stone-200 flex flex-col flex-shrink-0 z-20 transition-all duration-300 relative group ease-in-out shadow-sm ${isCollapsed ? 'w-[72px]' : 'w-72'}`}
-    >
-      {/* Header - Height 64px (h-16) for standard alignment */}
+  // Close sidebar on mobile when selecting a project
+  const handleSelectProject = (id: string) => {
+    onSelectProject(id);
+    // Close on mobile
+    if (window.innerWidth < 768) {
+      close();
+    }
+  };
+
+  // Sidebar panel content (shared between mobile and desktop)
+  const sidebarContent = (
+    <>
+      {/* Header */}
       <div className={`h-16 flex items-center border-b border-stone-200/50 shrink-0 transition-all relative ${isCollapsed ? 'justify-center px-0' : 'justify-between px-5'}`}>
         {!isCollapsed ? (
           <div className="flex items-center gap-3 text-stone-900 overflow-hidden">
-            <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
-              <Command className="w-4 h-4 text-[#FDFCFB]" />
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 relative overflow-hidden group bg-white shadow-sm border border-stone-200/50">
+              <img src="/logo.png" alt="LightWork Logo" className="w-full h-full object-contain" />
+              <div className="absolute inset-0 bg-clay-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-            <span className="font-logo font-light text-2xl tracking-tight text-stone-900 whitespace-nowrap">LightWork.</span>
+            <span className="font-logo font-medium text-xl tracking-tight text-stone-900 whitespace-nowrap">LightWork.</span>
           </div>
         ) : (
-          <div className="w-9 h-9 bg-stone-900 rounded-lg flex items-center justify-center shadow-sm">
-            <Command className="w-5 h-5 text-[#FDFCFB]" />
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center relative overflow-hidden group bg-white shadow-sm border border-stone-200/50">
+            <img src="/logo.png" alt="LightWork Logo" className="w-full h-full object-contain" />
+            <div className="absolute inset-0 bg-clay-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
         )}
 
-        {/* Toggle Button */}
+        {/* Desktop Toggle (hidden on mobile) */}
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`text-stone-400 hover:text-stone-700 transition-colors ${isCollapsed ? 'absolute -right-3 top-12 bg-white border border-stone-200 shadow-sm rounded-full p-1 z-30' : ''}`}
-          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          onClick={toggleCollapse}
+          className={`hidden md:block text-stone-400 hover:text-stone-700 transition-colors ${isCollapsed ? 'absolute -right-3 top-12 bg-white border border-stone-200 shadow-sm rounded-full p-1 z-30' : ''}`}
+          aria-label={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
-          {isCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-4 h-4" />}
+          {isCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" aria-hidden="true" /> : <PanelLeftClose className="w-4 h-4" aria-hidden="true" />}
+        </button>
+
+        {/* Mobile Close Button (visible only on mobile when open) */}
+        <button
+          onClick={close}
+          className="md:hidden p-2 -mr-2 text-stone-400 hover:text-stone-700 transition-colors"
+          aria-label="Close sidebar"
+        >
+          <X className="w-5 h-5" aria-hidden="true" />
         </button>
       </div>
 
@@ -197,31 +206,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={handleCreateProject}
           disabled={isCreating}
           title="New Project"
-          className={`
-            flex items-center rounded-lg font-heading font-medium text-stone-900 bg-white border border-stone-200 shadow-sm hover:border-stone-300 hover:shadow-md transition-all group h-9 disabled:opacity-50 disabled:cursor-not-allowed
-            ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}
-`}
+          className={`flex items-center rounded-lg font-heading font-medium text-stone-900 bg-white border border-stone-200 shadow-sm hover:border-stone-300 hover:shadow-md transition-all group h-9 disabled:opacity-50 disabled:cursor-not-allowed ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}`}
         >
           <div className="w-4 h-4 flex items-center justify-center shrink-0">
             {isCreating ? (
-              <Loader2 className="w-4 h-4 text-stone-500 animate-spin" />
+              <Loader2 className="w-4 h-4 text-stone-500 animate-spin" aria-hidden="true" />
             ) : (
-              <Plus className="w-4 h-4 text-stone-500 group-hover:text-stone-900 transition-colors" />
+              <Plus className="w-4 h-4 text-stone-500 group-hover:text-stone-900 transition-colors" aria-hidden="true" />
             )}
           </div>
           {!isCollapsed && <span>{isCreating ? 'Creating...' : 'New Project'}</span>}
         </button>
 
         <button
-          onClick={() => onChangeView('modules')}
+          onClick={() => { onChangeView('modules'); if (window.innerWidth < 768) close(); }}
           title="Module Library"
-          className={`
-            flex items-center rounded-lg font-heading font-medium transition-all h-9
-            ${currentView === 'modules' ? 'bg-stone-100 text-stone-900' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-700'}
-            ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}
-`}
+          className={`flex items-center rounded-lg font-heading font-medium transition-all h-9 ${currentView === 'modules' ? 'bg-stone-100 text-stone-900' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-700'} ${isCollapsed ? 'justify-center w-9 p-0' : 'w-full gap-2.5 px-3 text-sm'}`}
         >
-          <Library className={`shrink-0 ${isCollapsed ? 'w-4 h-4' : 'w-4 h-4'}`} />
+          <Library className="shrink-0 w-4 h-4" aria-hidden="true" />
           {!isCollapsed && <span>Module Library</span>}
         </button>
       </div>
@@ -230,26 +232,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {!isCollapsed && (
         <div className="px-4 py-3 shrink-0">
           <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400 group-focus-within:text-stone-600 transition-colors" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400 group-focus-within:text-stone-600 transition-colors" aria-hidden="true" />
             <input
               type="text"
               placeholder="Search history..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-              className="w-full bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 h-8 text-xs font-medium text-stone-700 placeholder:text-stone-400 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400/20 transition-all font-sans"
+              className="w-full bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 h-8 text-xs font-medium text-stone-700 placeholder:text-stone-400 focus:outline-none focus:border-clay-400 focus:ring-4 focus:ring-clay-500/5 transition-all font-sans"
             />
           </div>
         </div>
       )}
 
       {/* Main Nav (Scrollable) */}
-      <div className={`flex-1 overflow-y-auto px-2 space-y-0.5 ${isCollapsed ? 'scrollbar-hide' : ''}`}>
-        {/* Pinned Projects (hide when searching) */}
+      <nav className={`flex-1 overflow-y-auto px-2 space-y-0.5 ${isCollapsed ? 'scrollbar-hide' : ''}`} role="navigation" aria-label="Projects">
+        {/* Pinned Projects */}
         {!isCollapsed && !searchTerm && pinnedProjects.length > 0 && (
           <>
             <div className="px-3 py-2 mt-2">
               <p className="text-[10px] font-heading font-bold text-clay-600 uppercase tracking-wider flex items-center gap-1.5">
-                <Pin className="w-3 h-3" />
+                <Pin className="w-3 h-3" aria-hidden="true" />
                 Pinned ({pinnedProjects.length}/{MAX_PINNED})
               </p>
             </div>
@@ -258,21 +260,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <div
                   key={`pinned-${project.id}`}
-                  className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive
-                    ? 'bg-clay-100 text-stone-900'
-                    : 'text-stone-600 hover:bg-clay-50 hover:text-stone-900'
-                    }`}
+                  className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive ? 'bg-clay-100 text-stone-900' : 'text-stone-600 hover:bg-clay-50 hover:text-stone-900'}`}
                 >
-                  {/* Active Accent Bar */}
                   {isActive && !isCollapsed && (
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-clay-500 shadow-sm" />
                   )}
                   <button
-                    onClick={() => onSelectProject(project.id)}
+                    onClick={() => handleSelectProject(project.id)}
                     onDoubleClick={() => startEditing(project)}
                     className={`flex items-center font-medium h-9 font-sans w-full gap-3 px-3 text-sm pr-16 ${isActive ? 'pl-5 font-semibold' : ''}`}
                   >
-                    <Pin className={`flex-shrink-0 w-3.5 h-3.5 transition-colors ${isActive ? 'text-clay-600' : 'text-clay-400 group-hover:text-clay-500'}`} />
+                    <Pin className={`flex-shrink-0 w-3.5 h-3.5 transition-colors ${isActive ? 'text-clay-600' : 'text-clay-400 group-hover:text-clay-500'}`} aria-hidden="true" />
                     <span className="truncate text-left flex-1">{project.name}</span>
                     {project.jobs.length > 0 && (
                       <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-clay-200 text-clay-700' : 'bg-clay-100 text-clay-500 group-hover:text-clay-600'}`}>
@@ -280,16 +278,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </span>
                     )}
                   </button>
-                  {/* Unpin button */}
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      togglePin(project.id);
-                    }}
+                    onClick={(e) => { e.stopPropagation(); togglePin(project.id); }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-clay-400 hover:text-clay-600 hover:bg-clay-50 rounded-md opacity-0 group-hover:opacity-100 transition-all z-10"
                     title="Unpin"
+                    aria-label={`Unpin ${project.name}`}
                   >
-                    <PinOff className="w-3 h-3" />
+                    <PinOff className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </div>
               );
@@ -309,7 +304,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {filteredProjects.length === 0 ? (
           !isCollapsed && (
             <div className="px-4 py-12 text-center flex flex-col items-center gap-3">
-              <Archive className="w-8 h-8 text-stone-300" />
+              <Archive className="w-8 h-8 text-stone-300" aria-hidden="true" />
               <span className="text-sm text-stone-500 italic">No projects found</span>
             </div>
           )
@@ -320,12 +315,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <div
                   key={project.id}
-                  className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive
-                    ? 'bg-clay-50 text-stone-900'
-                    : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
-                    } ${isCollapsed ? 'justify-center py-2' : ''}`}
+                  className={`group relative flex items-center rounded-lg transition-all duration-200 ${isActive ? 'bg-clay-50 text-stone-900' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'} ${isCollapsed ? 'justify-center py-2' : ''}`}
                 >
-                  {/* Active Accent Bar - improved visibility */}
                   {isActive && !isCollapsed && (
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-clay-500 shadow-sm" />
                   )}
@@ -339,31 +330,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onChange={(e) => setEditName(e.target.value)}
                         onBlur={saveEditing}
                         onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
-                        className="flex-1 min-w-0 bg-white border border-stone-300 rounded px-2 h-7 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-stone-200 font-sans"
+                        className="flex-1 min-w-0 bg-white border border-stone-300 rounded px-2 h-7 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-clay-500/20 font-sans"
                       />
                       <button onMouseDown={saveEditing} className="text-stone-600 hover:text-stone-900">
-                        <Check className="w-3.5 h-3.5" />
+                        <Check className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     </div>
                   ) : (
                     <>
                       <button
-                        onClick={() => onSelectProject(project.id)}
+                        onClick={() => handleSelectProject(project.id)}
                         onDoubleClick={() => startEditing(project)}
                         title={isCollapsed ? project.name : undefined}
-                        className={`
-                                            flex items-center font-medium h-9 font-sans
-                                            ${isCollapsed ? 'justify-center w-9 p-0 rounded-lg' : 'w-full gap-3 px-3 text-sm pr-16'}
-                                            ${isActive && !isCollapsed ? 'pl-5 font-semibold' : ''}
-}`}
+                        className={`flex items-center font-medium h-9 font-sans ${isCollapsed ? 'justify-center w-9 p-0 rounded-lg' : 'w-full gap-3 px-3 text-sm pr-16'} ${isActive && !isCollapsed ? 'pl-5 font-semibold' : ''}`}
                       >
-                        <History className={`flex-shrink-0 transition-colors ${isActive ? 'text-stone-900' : 'text-stone-500 group-hover:text-stone-600'} ${isCollapsed ? 'w-4 h-4' : 'w-3.5 h-3.5'} `} />
-
+                        <History className={`flex-shrink-0 transition-colors ${isActive ? 'text-stone-900' : 'text-stone-500 group-hover:text-stone-600'} ${isCollapsed ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} aria-hidden="true" />
                         {!isCollapsed && (
                           <>
                             <span className="truncate text-left flex-1">{project.name}</span>
                             {project.jobs.length > 0 && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-stone-200 text-stone-600' : 'bg-stone-100 text-stone-500 group-hover:text-stone-600'} `}>{project.jobs.length}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${isActive ? 'bg-stone-200 text-stone-600' : 'bg-stone-100 text-stone-500 group-hover:text-stone-600'}`}>{project.jobs.length}</span>
                             )}
                           </>
                         )}
@@ -371,30 +357,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                       {!isCollapsed && (
                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all z-10">
-                          {/* Pin button */}
                           {!isPinned(project.id) && pinnedIds.length < MAX_PINNED && (
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                togglePin(project.id);
-                              }}
+                              onClick={(e) => { e.stopPropagation(); togglePin(project.id); }}
                               className="p-1.5 text-stone-300 hover:text-clay-600 hover:bg-clay-50 rounded-md transition-colors"
                               title="Pin to top"
+                              aria-label={`Pin ${project.name}`}
                             >
-                              <Pin className="w-3 h-3" />
+                              <Pin className="w-3 h-3" aria-hidden="true" />
                             </button>
                           )}
-                          {/* Duplicate button */}
                           {onDuplicateProject && (
                             <button
                               onClick={(e) => { e.stopPropagation(); onDuplicateProject(project.id); }}
                               className="p-1.5 text-stone-300 hover:text-stone-600 hover:bg-stone-50 rounded-md transition-colors"
                               title="Duplicate Project"
+                              aria-label={`Duplicate ${project.name}`}
                             >
-                              <Copy className="w-3 h-3" />
+                              <Copy className="w-3 h-3" aria-hidden="true" />
                             </button>
                           )}
-                          {/* Delete button */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -404,8 +386,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             }}
                             className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                             title="Delete Project"
+                            aria-label={`Delete ${project.name}`}
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3 h-3" aria-hidden="true" />
                           </button>
                         </div>
                       )}
@@ -414,22 +397,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               );
             })}
-            {/* Intersection Target */}
             <div ref={observerTarget} className="h-4 w-full" />
           </>
         )}
-      </div>
+      </nav>
 
       {/* Footer - User Profile */}
-      <div className={`border-t border-stone-100 bg-[#FDFCFB] shrink-0 ${isCollapsed ? 'p-2' : 'p-4'} `}>
-        <UserProfile isCollapsed={isCollapsed} />
+      <div className={`border-t border-stone-100 bg-[#FDFCFB] shrink-0 ${isCollapsed ? 'p-2' : 'p-4'}`}>
+        <UserProfile isCollapsed={isCollapsed} onClose={close} />
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile Backdrop */}
+      <div
+        className={`fixed inset-0 bg-stone-900/30 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={close}
+        aria-hidden="true"
+      />
+
+      {/* Sidebar Panel */}
+      <aside
+        ref={sidebarRef}
+        className={`
+          fixed md:relative inset-y-0 left-0 z-50 md:z-20
+          h-full bg-[#FDFCFB] border-r border-stone-200 flex flex-col flex-shrink-0
+          transition-all duration-300 ease-in-out shadow-lg md:shadow-sm
+          ${isCollapsed ? 'md:w-[72px]' : 'md:w-72'}
+          w-[85vw] max-w-[320px] md:max-w-none
+          ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}
+        aria-label="Main navigation"
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 };
 
+// Mobile Menu Trigger (exported for use in App.tsx header)
+export function MobileMenuTrigger() {
+  const { toggle } = useSidebar();
+
+  return (
+    <button
+      onClick={toggle}
+      className="md:hidden p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+      aria-label="Open menu"
+    >
+      <Menu className="w-5 h-5" aria-hidden="true" />
+    </button>
+  );
+}
+
 // User Profile Component
-function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
+function UserProfile({ isCollapsed, onClose }: { isCollapsed: boolean; onClose: () => void }) {
   const { user, signOut } = useAuth();
 
   if (!user) return null;
@@ -449,7 +473,7 @@ function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
       <div className="flex flex-col items-center gap-2">
         <button
           onClick={handleSignOut}
-          title={`Sign out(${userEmail})`}
+          title={`Sign out (${userEmail})`}
           className="w-9 h-9 rounded-full flex items-center justify-center text-white font-heading font-bold text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all"
           style={{ background: user.photoURL ? 'transparent' : getGradient(userName) }}
         >
@@ -486,15 +510,13 @@ function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
       {/* Settings Button */}
       <button
         onClick={() => {
-          // Traverse up to find the onChangeView handler passed to sidebar
-          // This component logic is getting tricky with props drilling
-          // Ideally we pass onSettings to UserProfile or use context
           const event = new CustomEvent('lightwork:navigate-settings');
           window.dispatchEvent(event);
+          if (window.innerWidth < 768) onClose();
         }}
         className="flex items-center gap-2.5 w-full px-3 h-9 text-xs font-semibold text-stone-500 hover:text-stone-900 hover:bg-stone-50 transition-colors rounded-lg font-sans mb-1"
       >
-        <Settings className="w-3.5 h-3.5" />
+        <Settings className="w-3.5 h-3.5" aria-hidden="true" />
         <span>Settings</span>
       </button>
 
@@ -503,7 +525,7 @@ function UserProfile({ isCollapsed }: { isCollapsed: boolean }) {
         onClick={handleSignOut}
         className="flex items-center gap-2.5 w-full px-3 h-9 text-xs font-semibold text-stone-500 hover:text-red-600 hover:bg-red-50 transition-colors rounded-lg font-sans"
       >
-        <LogOut className="w-3.5 h-3.5" />
+        <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
         <span>Sign Out</span>
       </button>
     </div>

@@ -1,5 +1,7 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { getAuthContext } from '../../lib/auth';
+import { generatePresignedUrl } from '../../lib/presigner';
 
 // Helper to convert ArrayBuffer to base64 safely
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -17,6 +19,15 @@ export async function onRequestPost(context: any) {
   console.log("[Upload API] Request received");
 
   try {
+    // Require authentication
+    const auth = await getAuthContext(context.request);
+    if (!auth.userId) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const formData = await context.request.formData();
     const file = formData.get('file');
     const projectId = formData.get('projectId');
@@ -26,6 +37,18 @@ export async function onRequestPost(context: any) {
     if (!file || !projectId) {
       console.log("[Upload API] Missing file or projectId");
       return new Response("Missing file or project ID", { status: 400 });
+    }
+
+    // Verify project ownership
+    const project = await context.env.DB.prepare(
+      "SELECT user_id FROM jobs WHERE id = ?"
+    ).bind(projectId).first();
+
+    if (!project || project.user_id !== auth.userId) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const id = crypto.randomUUID();
@@ -103,12 +126,39 @@ export async function onRequestPost(context: any) {
       }
     })());
 
-    // 4. Return ImageJob structure expected by frontend
+    // 4. Generate presigned URLs if credentials are available
+    let originalUrl = `/api/images/${encodeURIComponent(r2Key)}`;
+    let thumbnailUrl = `/api/images/${encodeURIComponent(r2Key)}?thumb=true`;
+
+    const hasPresignedCredentials = context.env.R2_ACCESS_KEY_ID &&
+      context.env.R2_SECRET_ACCESS_KEY &&
+      context.env.R2_ACCOUNT_ID &&
+      context.env.R2_BUCKET;
+
+    if (hasPresignedCredentials) {
+      try {
+        originalUrl = await generatePresignedUrl(
+          { key: r2Key, method: 'GET', expiresIn: 3600 },
+          {
+            accessKeyId: context.env.R2_ACCESS_KEY_ID,
+            secretAccessKey: context.env.R2_SECRET_ACCESS_KEY,
+            accountId: context.env.R2_ACCOUNT_ID,
+            bucketName: context.env.R2_BUCKET,
+          }
+        );
+        thumbnailUrl = originalUrl; // Same URL for now, could add resize later
+      } catch (e) {
+        console.error("[Upload API] Failed to generate presigned URL:", e);
+        // Fall back to proxy URL
+      }
+    }
+
+    // 5. Return ImageJob structure expected by frontend
     const job = {
       id: id,
       fileName: file.name,
-      originalUrl: `/api/images/${encodeURIComponent(r2Key)}`,
-      thumbnailUrl: `/api/images/${encodeURIComponent(r2Key)}?thumb=true`,
+      originalUrl,
+      thumbnailUrl,
       status: 'queued',
       localPrompt: '',
       retryCount: 0,
@@ -122,3 +172,4 @@ export async function onRequestPost(context: any) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
 }
+

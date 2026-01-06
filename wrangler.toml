@@ -17,3 +17,13 @@ bucket_name = "bananabatch-storage"
 # Environment variables
 [vars]
 ENVIRONMENT = "production"
+# R2 bucket name for presigned URLs (same as bucket_name above)
+R2_BUCKET = "bananabatch-storage"
+
+# --- SECRETS (set via `wrangler secret put`) ---
+# R2_ACCESS_KEY_ID - Generate from Cloudflare Dashboard -> R2 -> Manage R2 API Tokens
+# R2_SECRET_ACCESS_KEY - The secret from the API token
+# R2_ACCOUNT_ID - Your Cloudflare account ID
+# GEMINI_API_KEY - Google AI API key
+# FREE_GEMINI_API_KEY - Optional: separate free-tier key for OCR/search
+

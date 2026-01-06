@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HelpCircle } from 'lucide-react';
 
@@ -24,10 +25,37 @@ export const Tooltip: React.FC<TooltipProps> = ({
     const [isVisible, setIsVisible] = useState(false);
     const timeoutRef = useRef<number | null>(null);
     const triggerRef = useRef<HTMLDivElement>(null);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
 
     const showTooltip = () => {
         timeoutRef.current = window.setTimeout(() => {
-            setIsVisible(true);
+            if (triggerRef.current) {
+                const rect = triggerRef.current.getBoundingClientRect();
+                let top = 0;
+                let left = 0;
+
+                // Calculate position based on trigger element
+                switch (position) {
+                    case 'top':
+                        top = rect.top - 8; // 8px Gap
+                        left = rect.left + rect.width / 2;
+                        break;
+                    case 'bottom':
+                        top = rect.bottom + 8;
+                        left = rect.left + rect.width / 2;
+                        break;
+                    case 'left':
+                        top = rect.top + rect.height / 2;
+                        left = rect.left - 8;
+                        break;
+                    case 'right':
+                        top = rect.top + rect.height / 2;
+                        left = rect.right + 8;
+                        break;
+                }
+                setCoords({ top, left });
+                setIsVisible(true);
+            }
         }, delay);
     };
 
@@ -47,50 +75,60 @@ export const Tooltip: React.FC<TooltipProps> = ({
         };
     }, []);
 
-    const positionClasses = {
-        top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-        bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
-        left: 'right-full top-1/2 -translate-y-1/2 mr-2',
-        right: 'left-full top-1/2 -translate-y-1/2 ml-2',
+    // Animation variants based on position
+    const variants = {
+        top: { opacity: 1, scale: 1, y: -10, x: "-50%" },
+        bottom: { opacity: 1, scale: 1, y: 10, x: "-50%" },
+        left: { opacity: 1, scale: 1, x: -10, y: "-50%" },
+        right: { opacity: 1, scale: 1, x: 10, y: "-50%" },
+        exit: { opacity: 0, scale: 0.95, transition: { duration: 0.1 } }
     };
 
-    const arrowClasses = {
-        top: 'bottom-[-6px] left-1/2 -translate-x-1/2 border-l-transparent border-r-transparent border-b-transparent border-t-stone-800',
-        bottom: 'top-[-6px] left-1/2 -translate-x-1/2 border-l-transparent border-r-transparent border-t-transparent border-b-stone-800',
-        left: 'right-[-6px] top-1/2 -translate-y-1/2 border-t-transparent border-b-transparent border-r-transparent border-l-stone-800',
-        right: 'left-[-6px] top-1/2 -translate-y-1/2 border-t-transparent border-b-transparent border-l-transparent border-r-stone-800',
+    // Initial states for animation
+    const initial = {
+        top: { opacity: 0, scale: 0.95, y: 0, x: "-50%" },
+        bottom: { opacity: 0, scale: 0.95, y: 0, x: "-50%" },
+        left: { opacity: 0, scale: 0.95, x: 0, y: "-50%" },
+        right: { opacity: 0, scale: 0.95, x: 0, y: "-50%" }
     };
+
+    const tooltipContent = (
+        <AnimatePresence>
+            {isVisible && (
+                <motion.div
+                    initial={initial[position]}
+                    animate={variants[position]}
+                    exit={variants.exit}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    className="fixed z-[9999] pointer-events-none"
+                    style={{
+                        top: coords.top,
+                        left: coords.left,
+                        maxWidth
+                    }}
+                >
+                    <div className="bg-stone-900/90 text-white text-xs font-sans rounded-lg px-3 py-2 shadow-xl backdrop-blur-md border border-white/10">
+                        {content}
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
 
     return (
-        <div
-            ref={triggerRef}
-            className="relative inline-flex"
-            onMouseEnter={showTooltip}
-            onMouseLeave={hideTooltip}
-            onFocus={showTooltip}
-            onBlur={hideTooltip}
-        >
-            {children}
-            <AnimatePresence>
-                {isVisible && (
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.92, y: position === 'bottom' ? -4 : 4 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.92 }}
-                        transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
-                        className={`absolute z-[500] ${positionClasses[position]}`}
-                        style={{ maxWidth }}
-                    >
-                        <div className="bg-gradient-to-br from-stone-800 via-stone-850 to-stone-900 text-white text-xs rounded-xl px-4 py-2.5 shadow-2xl shadow-stone-900/40 leading-relaxed border border-white/[0.08] backdrop-blur-sm">
-                            {content}
-                        </div>
-                        <div
-                            className={`absolute w-0 h-0 border-[6px] ${arrowClasses[position]}`}
-                        />
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
+        <>
+            <div
+                ref={triggerRef}
+                className="relative inline-flex"
+                onMouseEnter={showTooltip}
+                onMouseLeave={hideTooltip}
+                onFocus={showTooltip}
+                onBlur={hideTooltip}
+            >
+                {children}
+            </div>
+            {createPortal(tooltipContent, document.body)}
+        </>
     );
 };
 

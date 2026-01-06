@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, Suspense, useMemo } from 'react';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, MobileMenuTrigger } from './components/Sidebar';
+import { SidebarProvider } from './hooks/useSidebar';
 import { CommandDock } from './components/CommandDock';
 import { ImageCard } from './components/ImageCard';
 import { ToastContainer, ToastMsg } from './components/Toast';
@@ -13,9 +14,10 @@ import { Project, ImageJob, ProcessingStatus, DEFAULT_MODULES, Module, AppModel,
 import { UploadCloud, Image as ImageIcon, Command, Key, RefreshCw, Trash2, BoxSelect, Grip, Edit2, Layers, CheckCircle2, Filter, AlertCircle, Clock, Loader2, FileText, LayoutGrid, Columns, Search, X, Sparkles } from 'lucide-react';
 import { processImageWithGemini, generateSmartFilename } from './services/geminiService';
 import { generateThumbnail, wait, calculateBackoff } from './utils';
+import { useSettings } from './hooks/useSettings';
 import { api } from './services/api';
 import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
+import { SortableContext, rectSortingStrategy, arrayMove, useSortable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
 const LazyInspector = React.lazy(() => import('./components/Inspector').then(m => ({ default: m.Inspector })));
@@ -24,9 +26,11 @@ const LazyOnboarding = React.lazy(() => import('./components/Onboarding').then(m
 const LazyModulesManager = React.lazy(() => import('./components/ModulesManager').then(m => ({ default: m.ModulesManager })));
 const LazyBatchStatusPanel = React.lazy(() => import('./components/BatchStatusPanel').then(m => ({ default: m.BatchStatusPanel })));
 const LazyBackToTop = React.lazy(() => import('./components/BackToTop').then(m => ({ default: m.BackToTop })));
+const LazyReportModal = React.lazy(() => import('./components/ReportModal').then(m => ({ default: m.ReportModal })));
 
 const LazySettingsPage = React.lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useHistory } from './hooks/useHistory';
 
 // Tier 1 Optimized Settings
 // With paid Tier 1 limits (500 RPM, 500K TPM), we can process much faster
@@ -91,10 +95,11 @@ function AppContent() {
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [toasts, setToasts] = useState<ToastMsg[]>([]);
     const [gridColumns, setGridColumns] = useState(4);
-    const [isMasonryView, setIsMasonryView] = useState(false);
+    const [userAdjustedGrid, setUserAdjustedGrid] = useState(false); // Track if user manually adjusted
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false); // Mobile search state
     const [filter, setFilter] = useState<FilterType>('all');
     const [apiMode, setApiMode] = useState<ApiMode>('fast');
+    const { settings } = useSettings();
 
     // AI Search State
     const [searchQuery, setSearchQuery] = useState('');
@@ -109,6 +114,7 @@ function AppContent() {
     const [headerTempName, setHeaderTempName] = useState('');
     const headerInputRef = useRef<HTMLInputElement>(null);
 
+    const [showReportModal, setShowReportModal] = useState(false);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     const lastSelectedId = useRef<string | null>(null);
@@ -124,6 +130,45 @@ function AppContent() {
     // Refs for handlers used in keyboard shortcuts (to avoid temporal dead zone)
     const handleProcessBatchRef = useRef<() => void>(() => { });
     const processQueueRef = useRef<() => void>(() => { });
+
+    // Undo/Redo History for projects state
+    const projectsHistoryRef = useRef<Project[][]>([]);
+    const projectsFutureRef = useRef<Project[][]>([]);
+    const lastProjectsSnapshotTimeRef = useRef<number>(0);
+
+    const pushProjectsHistory = useCallback(() => {
+        const now = Date.now();
+        // Debounce: only push if more than 500ms since last snapshot
+        if (now - lastProjectsSnapshotTimeRef.current > 500) {
+            projectsHistoryRef.current = [...projectsHistoryRef.current.slice(-49), projectsRef.current];
+            projectsFutureRef.current = []; // Clear future on new action
+            lastProjectsSnapshotTimeRef.current = now;
+        }
+    }, []);
+
+    const undoProjects = useCallback(() => {
+        if (projectsHistoryRef.current.length === 0) {
+            toast.info('Nothing to undo');
+            return;
+        }
+        const previous = projectsHistoryRef.current[projectsHistoryRef.current.length - 1];
+        projectsHistoryRef.current = projectsHistoryRef.current.slice(0, -1);
+        projectsFutureRef.current = [projectsRef.current, ...projectsFutureRef.current];
+        setProjects(previous);
+        toast.success('Undone');
+    }, []);
+
+    const redoProjects = useCallback(() => {
+        if (projectsFutureRef.current.length === 0) {
+            toast.info('Nothing to redo');
+            return;
+        }
+        const next = projectsFutureRef.current[0];
+        projectsFutureRef.current = projectsFutureRef.current.slice(1);
+        projectsHistoryRef.current = [...projectsHistoryRef.current, projectsRef.current];
+        setProjects(next);
+        toast.success('Redone');
+    }, []);
 
     useEffect(() => {
         projectsRef.current = projects;
@@ -177,6 +222,30 @@ function AppContent() {
         init();
     }, []);
 
+    // Responsive Grid Columns
+    useEffect(() => {
+        const calculateColumns = () => {
+            const width = window.innerWidth;
+            if (width < 640) return 2;        // Mobile
+            if (width < 1024) return 3;       // Tablet
+            if (width < 1280) return 4;       // Desktop
+            return 4;                          // Large desktop (user can adjust via slider)
+        };
+
+        const handleResize = () => {
+            // Only auto-adjust if user hasn't manually changed (or on mobile where slider is hidden)
+            if (!userAdjustedGrid || window.innerWidth < 1024) {
+                setGridColumns(calculateColumns());
+            }
+        };
+
+        // Set initial value
+        handleResize();
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [userAdjustedGrid]);
+
     const addToast = (type: ToastMsg['type'], text: string) => {
         const id = crypto.randomUUID();
         setToasts(prev => [...prev, { id, type, text }]);
@@ -221,6 +290,20 @@ function AppContent() {
                 jobs: p.jobs.map(j => j.id === jobId ? { ...j, ...updates } : j)
             };
         }));
+
+        // Persist fileName and localPrompt changes to backend
+        // Only persist if it's a real job ID (not temp IDs starting with 'temp_')
+        if (!jobId.startsWith('temp_')) {
+            const persistableUpdates: { fileName?: string; localPrompt?: string } = {};
+            if (updates.fileName !== undefined) persistableUpdates.fileName = updates.fileName;
+            if (updates.localPrompt !== undefined) persistableUpdates.localPrompt = updates.localPrompt;
+
+            if (Object.keys(persistableUpdates).length > 0) {
+                api.updateImage(jobId, persistableUpdates).catch(err => {
+                    console.error('Failed to persist image update:', err);
+                });
+            }
+        }
     }, [currentProjectId]);
 
     // Reset infinite-scroll window when project/filter changes
@@ -392,7 +475,9 @@ function AppContent() {
             if (newJob) {
                 handleJobClick(newJob.id, false, false);
             }
-        }
+        },
+        onUndo: undoProjects,
+        onRedo: redoProjects
     });
 
     const stopUploadProgress = useCallback((jobId: string) => {
@@ -479,6 +564,10 @@ function AppContent() {
             variant: 'danger',
         });
         if (!confirmed) return;
+
+        // Push to history for undo support
+        pushProjectsHistory();
+
         setProjects(prev => prev.filter(p => p.id !== id));
         if (currentProjectId === id && projects.length > 0) {
             const next = projects.find(p => p.id !== id);
@@ -499,33 +588,29 @@ function AppContent() {
     const processFiles = async (files: File[]) => {
         if (currentView !== 'workspace') setCurrentView('workspace');
 
-        const newJobs: ImageJob[] = [];
+        const newFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+        if (newFiles.length === 0) return;
 
-        // Upload logic would go here in real backend scenario
-        for (const file of files) {
-            // Optimistic UI
+        addToast('info', `Added ${newFiles.length} images`);
+
+        const newJobs: ImageJob[] = await Promise.all(newFiles.map(async (file) => {
+            // Apply Smart Rename from Settings if enabled
+            let fileName = file.name;
+            if (settings.smartRename) {
+                // Placeholder logic: in a real app we might ask AI here, or just clean up the name
+                // For now, let's just make it "cleaner" (replace spaces with dashes, lowercase)
+                const ext = fileName.split('.').pop();
+                const base = fileName.replace(/\.[^/.]+$/, "").toLowerCase().replace(/[^a-z0-9]/g, '-');
+                fileName = `${base}.${ext}`;
+            }
+
             const tempId = crypto.randomUUID();
             const thumb = await generateThumbnail(file);
-            const job: ImageJob = {
-                id: tempId,
-                file: file, // Keep file for thumbnail generation only
-                fileName: file.name,
-                thumbnailUrl: thumb.dataUrl,
-                status: 'uploading',
-                localPrompt: '',
-                retryCount: 0,
-                timestamp: Date.now(),
-                originalUrl: URL.createObjectURL(file),
-                width: thumb.width,
-                height: thumb.height,
-                uploadProgress: 0,
-            };
-            newJobs.push(job);
 
             // Start upload progress UI immediately
             startUploadProgress(tempId);
 
-            // Background Upload
+            // Background Upload (fire-and-forget, handled after return)
             api.uploadImage(currentProjectId, file).then(uploadedJob => {
                 stopUploadProgress(tempId);
                 if (uploadedJob) {
@@ -571,7 +656,21 @@ function AppContent() {
                     updateJob(tempId, { status: 'error', errorMsg: 'Upload failed' });
                 }
             });
-        }
+
+            return {
+                id: tempId,
+                file: file, // Store file temporarily for upload
+                fileName: fileName,
+                thumbnailUrl: thumb.dataUrl,
+                status: 'uploading' as const,
+                retryCount: 0,
+                timestamp: Date.now(),
+                originalUrl: URL.createObjectURL(file),
+                width: thumb.width,
+                height: thumb.height,
+                uploadProgress: 0,
+            };
+        }));
 
         // Track new image IDs for smooth scroll
         const newImageIds = newJobs.map(j => j.id);
@@ -607,6 +706,10 @@ function AppContent() {
     // Bulk Action Handlers
     const handleBulkDelete = () => {
         if (selectedJobs.length === 0) return;
+
+        // Push to history for undo support
+        pushProjectsHistory();
+
         const jobsToDelete = [...selectedJobs];
         const ids = jobsToDelete.map(j => j.id);
         const count = ids.length;
@@ -792,15 +895,28 @@ function AppContent() {
 
             const matchingIds = await api.searchImages(imageData, searchQuery);
             setSearchResults(matchingIds);
-            toast.success(`Found ${matchingIds.length} matching images`);
+            // Removed toast per user request
         } catch (error) {
             console.error('Search failed:', error);
-            toast.error('Search failed');
+            // toast.error('Search failed'); // Optional: keep error toast or remove it too. Kept silent for smoother UX? User said "search feature shouldnt bring up the toast as the results are already visiible". Error toast might still be useful, but let's suppress it for "clean" UX unless critical.
             setSearchResults(null);
         } finally {
             setIsSearching(false);
         }
     }, [searchQuery, currentProject]);
+
+    // Live Search with Debounce
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (searchQuery.trim()) {
+                handleSearch();
+            } else {
+                setSearchResults(null);
+            }
+        }, 300); // 300ms debounce
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, handleSearch]);
 
     // Clear search
     const clearSearch = useCallback(() => {
@@ -868,20 +984,9 @@ function AppContent() {
         });
     }, [currentProjectId, startUploadProgress, stopUploadProgress, updateJob]);
 
-    const generatePdfForCurrentProject = useCallback(async () => {
-        if (isGeneratingPdf) return;
-        setIsGeneratingPdf(true);
-        try {
-            const mod = await import('./services/pdfReport');
-            await mod.generateProjectPdfReport(currentProject);
-            addToast('success', 'PDF report generated');
-        } catch (e) {
-            console.error(e);
-            addToast('error', 'Failed to generate PDF');
-        } finally {
-            setIsGeneratingPdf(false);
-        }
-    }, [currentProject, isGeneratingPdf]);
+    const openReportModal = useCallback(() => {
+        setShowReportModal(true);
+    }, []);
 
     // Optimized parallel processing for Tier 1 limits
     const processQueueParallel = async () => {
@@ -1180,12 +1285,26 @@ function AppContent() {
             <Suspense fallback={null}>
                 <LazyLightbox isOpen={!!lightboxData} imageUrl={lightboxData?.url || ''} originalUrl={lightboxData?.original} onClose={() => setLightboxData(null)} />
             </Suspense>
+
+            <Suspense fallback={null}>
+                <LazyReportModal project={currentProject} isOpen={showReportModal} onClose={() => setShowReportModal(false)} />
+            </Suspense>
             {isDragging && <div className="fixed inset-4 border-4 border-dashed border-clay-500/50 rounded-3xl bg-clay-50/20 z-[100] pointer-events-none flex items-center justify-center backdrop-blur-sm"><div className="bg-[#FDFCFB]/90 p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4"><UploadCloud className="w-12 h-12 text-clay-600 animate-bounce" /><span className="font-bold text-2xl text-stone-900">Drop Assets to Ingest</span></div></div>}
 
             <Sidebar
                 projects={projects} currentProjectId={currentProjectId}
                 onSelectProject={(id) => { setCurrentProjectId(id); setCurrentView('workspace'); clearSelection(); }}
-                onCreateProject={async () => { const newP = await api.createProject(`Session #${projects.length + 1}`); if (newP) { setProjects([newP, ...projects]); setCurrentProjectId(newP.id); setCurrentView('workspace'); } }}
+                onCreateProject={async () => {
+                    const newP = await api.createProject(`Session #${projects.length + 1}`);
+                    if (newP) {
+                        // Apply default model from settings
+                        const projectWithSettings = { ...newP, selectedMode: settings.defaultModel };
+                        // We would essentially need to update this on the backend too in a real sync scenario
+                        setProjects([projectWithSettings, ...projects]);
+                        setCurrentProjectId(newP.id);
+                        setCurrentView('workspace');
+                    }
+                }}
                 onRenameProject={(id, name) => { setProjects(prev => prev.map(p => p.id === id ? { ...p, name } : p)); api.updateProject(id, { name }); }}
                 onDeleteProject={deleteProject} currentView={currentView} onChangeView={setCurrentView} onDuplicateProject={handleDuplicateProject}
             />
@@ -1230,6 +1349,9 @@ function AppContent() {
 
                             {/* LEFT ZONE: Context & Discovery */}
                             <div className="flex items-center gap-4 min-w-0">
+                                {/* Mobile Menu Trigger */}
+                                <MobileMenuTrigger />
+
                                 {/* Mobile Search Toggle */}
                                 <button
                                     onClick={() => setIsMobileSearchOpen(true)}
@@ -1320,38 +1442,33 @@ function AppContent() {
                             {/* RIGHT ZONE: Actions & View */}
                             <div className="flex items-center gap-3">
                                 {/* View Controls Group */}
-                                <div className="hidden xl:flex items-center gap-2 p-1 bg-white rounded-xl border border-stone-200 shadow-sm">
-                                    <div className="flex items-center gap-2 px-2 border-r border-stone-100" title="Grid Density">
+                                <div className="hidden lg:flex items-center gap-2 p-1 bg-white rounded-xl border border-stone-200 shadow-sm">
+                                    <div className="flex items-center gap-2 px-2" title="Image Size">
                                         <Grip className="w-3.5 h-3.5 text-stone-400" />
                                         <input
                                             type="range"
                                             min={2}
                                             max={6}
                                             step={1}
-                                            value={gridColumns}
-                                            onChange={(e) => setGridColumns(parseInt(e.target.value, 10))}
-                                            className="w-12 accent-stone-900 h-1.5 bg-stone-100 rounded-lg appearance-none cursor-pointer"
+                                            value={8 - gridColumns}
+                                            onChange={(e) => {
+                                                setGridColumns(8 - parseInt(e.target.value, 10));
+                                                setUserAdjustedGrid(true);
+                                            }}
+                                            className="w-16 accent-stone-900 h-1.5 bg-stone-100 rounded-lg appearance-none cursor-pointer"
                                         />
                                     </div>
-                                    <button
-                                        onClick={() => setIsMasonryView(!isMasonryView)}
-                                        className={`p-1.5 rounded-lg transition-colors ${isMasonryView ? 'bg-stone-100 text-stone-900' : 'text-stone-400 hover:text-stone-600 hover:bg-stone-50'}`}
-                                        title={isMasonryView ? 'Switch to Grid View' : 'Switch to Masonry View'}
-                                    >
-                                        {isMasonryView ? <Columns className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
-                                    </button>
                                 </div>
 
                                 {/* Primary Actions */}
                                 <div className="flex items-center gap-2 pl-2 border-l border-stone-200/50">
                                     {currentProject.jobs && currentProject.jobs.length > 0 && (
                                         <button
-                                            onClick={generatePdfForCurrentProject}
-                                            disabled={isGeneratingPdf}
+                                            onClick={openReportModal}
                                             className="p-2.5 text-stone-500 bg-white hover:bg-stone-50 hover:text-red-600 rounded-xl border border-stone-200 shadow-sm transition-all active:scale-95 disabled:opacity-50 hidden sm:block"
                                             title="Export PDF Report"
                                         >
-                                            {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                                            <FileText className="w-4 h-4" />
                                         </button>
                                     )}
 
@@ -1366,36 +1483,6 @@ function AppContent() {
                         <div ref={gridContainerRef} className="flex-1 overflow-y-auto p-4 md:p-10 pb-40 scroll-smooth" onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}>
                             {(currentProject.jobs || []).length === 0 ? (
                                 <EmptyState type="workspace" />
-                            ) : isMasonryView ? (
-                                /* Masonry Layout with Drag-to-Reorder */
-                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                                    <SortableContext items={renderedJobs.map(j => j.id)} strategy={rectSortingStrategy}>
-                                        <div
-                                            className="masonry-grid pb-24"
-                                            style={{ '--masonry-columns': gridColumns } as React.CSSProperties}
-                                        >
-                                            {renderedJobs.map(job => {
-                                                const isSearchMatch = !searchResults || searchResults.includes(job.id);
-                                                return (
-                                                    <SortableImageCard
-                                                        key={job.id}
-                                                        job={job}
-                                                        isSelected={!!job.selected}
-                                                        isActive={!!job.selected}
-                                                        onToggleSelect={toggleSelection}
-                                                        onClick={(id, e) => handleJobClick(id, e.shiftKey, e.metaKey || e.ctrlKey)}
-                                                        isSearchMatch={isSearchMatch}
-                                                    />
-                                                );
-                                            })}
-
-                                            {/* Infinite scroll sentinel */}
-                                            {renderedJobs.length < filteredJobs.length && (
-                                                <div ref={loadMoreRef} className="h-8" />
-                                            )}
-                                        </div>
-                                    </SortableContext>
-                                </DndContext>
                             ) : (
                                 /* Standard Grid Layout with Drag-to-Reorder */
                                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -1514,6 +1601,10 @@ function AuthenticatedApp() {
         return <LandingPage />;
     }
 
-    // Show main app content
-    return <AppContent />;
+    // Show main app content wrapped in SidebarProvider
+    return (
+        <SidebarProvider>
+            <AppContent />
+        </SidebarProvider>
+    );
 }

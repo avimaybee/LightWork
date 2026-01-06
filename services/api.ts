@@ -155,6 +155,24 @@ export const api = {
         }
     },
 
+    updateImage: async (imageId: string, updates: { fileName?: string; localPrompt?: string }): Promise<boolean> => {
+        try {
+            const authHeaders = await getAuthHeaders();
+            const res = await fetch(`${API_BASE}/images/${imageId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify(updates)
+            });
+            return res.ok;
+        } catch (e) {
+            console.error('Failed to update image', e);
+            return false;
+        }
+    },
+
     // AI-powered semantic search
     searchImages: async (images: Array<{ id: string, filename: string, thumbnailUrl: string }>, query: string): Promise<string[]> => {
         try {
