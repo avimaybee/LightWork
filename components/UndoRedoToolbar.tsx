@@ -16,10 +16,7 @@ export const UndoRedoToolbar: React.FC<UndoRedoToolbarProps> = ({
     onRedo,
     historyLength = 0
 }) => {
-    // Only show if there's something to undo or redo
-    if (!canUndo && !canRedo && historyLength === 0) {
-        return null;
-    }
+
 
     return (
         <div className="flex items-center gap-1 glass rounded-lg px-1.5 py-1 shadow-sm">

@@ -336,9 +336,19 @@ export const CommandDock: React.FC<CommandDockProps> = ({
                                     <div className="flex items-center gap-2 text-stone-300 text-xs">
                                         <span>💰</span>
                                         <span>
-                                            {apiMode === 'economy'
-                                                ? `~$${(queuedCount * 0.0195).toFixed(3)}`
-                                                : `~$${(queuedCount * 0.039).toFixed(3)}`}
+                                            {(() => {
+                                                const isPro = project.selectedMode === 'pro'; // Nano Banana Pro or Base
+                                                const isEconomy = apiMode === 'economy';
+
+                                                // Prices per image
+                                                // Nano Banana: $0.04 (Fast), $0.02 (Batch)
+                                                // Nano Banana Pro: $0.14 (Fast), $0.07 (Batch)
+                                                const price = isPro
+                                                    ? (isEconomy ? 0.07 : 0.14)
+                                                    : (isEconomy ? 0.02 : 0.04);
+
+                                                return `~$${(queuedCount * price).toFixed(2)}`;
+                                            })()}
                                         </span>
                                     </div>
                                 </div>

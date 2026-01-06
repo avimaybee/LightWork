@@ -1571,9 +1571,22 @@ function AppContent() {
                                 onClose={clearSelection}
                                 onUpdateJob={updateJob}
                                 onRetryUpload={retryUpload}
-                                onRemove={(ids) => {
+                                onRemove={async (ids) => {
+                                    pushProjectsHistory();
                                     setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: p.jobs.filter(j => !ids.includes(j.id)) } : p));
                                     clearSelection();
+
+                                    // Persist deletion
+                                    try {
+                                        await Promise.all(ids.map(id => api.deleteImage(id)));
+                                        addToast('success', ids.length > 1 ? 'Images deleted' : 'Image deleted');
+                                    } catch (e) {
+                                        console.error('Failed to delete images', e);
+                                        addToast('error', 'Failed to delete from server. Reloading...');
+                                        // Revert/Reload if failed
+                                        const p = await api.getProjects();
+                                        setProjects(p);
+                                    }
                                 }}
                                 onRetry={(ids) => {
                                     setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, jobs: p.jobs.map(j => ids.includes(j.id) ? { ...j, status: 'queued', errorMsg: undefined, retryCount: 0 } : j) } : p));
